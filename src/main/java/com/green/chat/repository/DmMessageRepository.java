@@ -18,6 +18,9 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, Long> {
 
 	List<DmMessage> findTop51ByConversationIdAndIdLessThanOrderByIdDesc(Long conversationId, Long beforeId);
 
+	// 이 메시지 뒤에 메시지가 더 있는지 (없으면 마지막 메시지 → 수정 시 사이드바 미리보기도 바꿈)
+	boolean existsByConversationIdAndIdGreaterThan(Long conversationId, Long id);
+
 	// 대화방별 마지막 메시지 (목록 미리보기용)
 	@Query("""
 			select m from DmMessage m

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Controller;
 
 import com.green.chat.dto.DeleteRequest;
 import com.green.chat.dto.DmDeletedEvent;
+import com.green.chat.dto.EditRequest;
 import com.green.chat.dto.DmReadEvent;
 import com.green.chat.dto.DmTypingEvent;
 import com.green.chat.dto.SendRequest;
@@ -94,6 +95,26 @@ public class DmSocketController {
 			}
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 삭제 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
+		}
+	}
+
+	// /app/dm/{id}/edit : 내 메시지 수정 → 나(다른 탭 포함)와 상대 화면에 반영
+	// 알림·안 읽은 수는 건드리지 않음 (조용히), 마지막 메시지면 사이드바 미리보기도 바뀜
+	@MessageMapping("/dm/{conversationId}/edit")
+	public void editMessage(@DestinationVariable Long conversationId, @Payload EditRequest request,
+			Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null)
+			return;
+
+		try {
+			DmService.Edited edited = dmService.edit(conversationId, request.id(), user.getId(), request.content());
+			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-edited", edited.event());
+			if (edited.partnerUsername() != null) {
+				messagingTemplate.convertAndSendToUser(edited.partnerUsername(), "/queue/dm-edited", edited.event());
+			}
+		} catch (IllegalArgumentException e) {
+			log.warn("[DM 수정 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
 		}
 	}
 }

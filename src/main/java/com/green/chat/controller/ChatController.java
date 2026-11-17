@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 import com.green.chat.dto.SendRequest;
 import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.DeleteRequest;
+import com.green.chat.dto.EditRequest;
 import com.green.chat.dto.MessageType;
 import com.green.chat.dto.TypingRequest;
 import com.green.chat.security.LoginUser;
@@ -113,6 +114,23 @@ public class ChatController {
 			return;
 		}
 		notifier.toRoom(roomId, ChatMessage.deleted(request.id()));
+	}
+
+	// 메시지 수정: 내 글 메시지만 → 방 안 모두의 화면에서 내용 교체 + "(수정됨)"
+	// 알림·안 읽은 수는 건드리지 않음 (조용히)
+	@MessageMapping("/chat/{roomId}/edit")
+	public void editMessage(@DestinationVariable Long roomId, @Payload EditRequest request, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null || !roomService.canJoin(roomId, user.getId()))
+			return;
+
+		String content = Formats.cut(request.content(), MAX_CONTENT);
+		try {
+			ChatMessage edited = chatService.edit(roomId, request.id(), user.getNickname(), content);
+			notifier.toRoom(roomId, edited);
+		} catch (IllegalArgumentException e) {
+			log.warn("[메시지 수정 실패] room={}, msg={}, reason={}", roomId, request.id(), e.getMessage());
+		}
 	}
 
 	@MessageMapping("/chat/{roomId}/kick")

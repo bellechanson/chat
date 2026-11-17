@@ -54,6 +54,10 @@ public class DmMessage {
 	@Embedded
 	private Attachment attachment;
 
+	// 마지막으로 수정한 시각 (수정 안 했으면 null → 화면에 "(수정됨)" 없음)
+	@Column(name = "edited_at")
+	private LocalDateTime editedAt;
+
 	protected DmMessage() {
 	}
 
@@ -71,6 +75,16 @@ public class DmMessage {
 
 	public void delete() {
 		this.deleted = true;
+	}
+
+	// 내용 수정 (글 메시지만, 검사는 DmService에서)
+	public void edit(String content) {
+		this.content = content;
+		this.editedAt = LocalDateTime.now();
+	}
+
+	public LocalDateTime getEditedAt() {
+		return editedAt;
 	}
 
 	public Long getId() {

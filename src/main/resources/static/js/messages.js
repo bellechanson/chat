@@ -162,19 +162,113 @@ function deleteButton(onClick) {
     return btn;
 }
 
+// 삭제 표시 (수정하던 중이었으면 수정창도 같이 닫힘 — 말풍선 내용을 통째로 바꾸므로)
 function markDeleted(div) {
     div.classList.add('deleted');
+    div.classList.remove('editing');
     const bubble = div.querySelector('.bubble');
     bubble.classList.remove('has-img', 'has-file');
     bubble.textContent = '삭제된 메시지입니다';
-    div.querySelector('.del-btn')?.remove();
+    div.querySelectorAll('.del-btn, .edit-btn, .msg-edited').forEach(b => b.remove());
 }
 
-// ───── 메시지 한 줄: 아바타 | 이름 · 시각 (· 1) [삭제] / 내용 ─────
+// ───── 메시지 수정 ─────
+function editButton(onClick) {
+    const btn = document.createElement('button');
+    btn.className = 'edit-btn';
+    btn.textContent = '수정';
+    btn.onclick = onClick;
+    return btn;
+}
+
+// 시각 옆 "(수정됨)" 표시 (마우스를 올리면 수정 시각)
+function setEditedMark(div, editedAt) {
+    const head = div.querySelector('.msg-head');
+    let mark = head.querySelector('.msg-edited');
+    if (!mark) {
+        mark = document.createElement('span');
+        mark.className = 'msg-edited';
+        mark.textContent = '(수정됨)';
+        head.querySelector('.msg-time').after(mark);
+    }
+    mark.title = editedAt ? `수정: ${editedAt}` : '수정됨';
+}
+
+// 수정 신호를 받았을 때 (나·다른 사람·내 다른 탭 모두): 내용 교체 + "(수정됨)"
+//   그 메시지를 수정하던 중이었으면 수정창을 닫고 새 내용으로
+function markEdited(div, content, editedAt) {
+    if (div.classList.contains('deleted')) return;
+    div.classList.remove('editing');
+    div.querySelector('.bubble').textContent = content;
+    setEditedMark(div, editedAt);
+}
+
+// 말풍선 자리에서 바로 고치기: Enter 저장, Esc 취소
+//   save(newText): 바뀐 내용이 있을 때만 불림 (서버로 보내기는 부르는 쪽에서)
+function startEdit(div, save) {
+    if (div.classList.contains('editing') || div.classList.contains('deleted')) return;
+    const bubble = div.querySelector('.bubble');
+    const original = bubble.textContent;
+    div.classList.add('editing');
+
+    const input = document.createElement('input');
+    input.className = 'edit-input';
+    input.maxLength = 1000;
+    input.value = original;
+    input.setAttribute('aria-label', '메시지 수정');
+
+    const hint = document.createElement('div');
+    hint.className = 'edit-hint';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-primary btn-sm';
+    saveBtn.textContent = '저장';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn btn-sm';
+    cancelBtn.textContent = '취소';
+    const keys = document.createElement('span');
+    keys.textContent = 'Enter 저장 · Esc 취소';
+    hint.append(saveBtn, cancelBtn, keys);
+
+    bubble.replaceChildren(input, hint);
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    function close(text) {
+        if (!div.classList.contains('editing')) return;   // 이미 삭제·수정 신호로 닫힘
+        div.classList.remove('editing');
+        bubble.textContent = text;
+    }
+    function done() {
+        const text = input.value.trim();
+        if (!text || text === original) return close(original);   // 비었거나 그대로면 취소
+        close(text);                 // 화면엔 바로 반영, 서버의 수정 신호가 오면 "(수정됨)"이 붙음
+        save(text);
+    }
+
+    input.addEventListener('keydown', (e) => {
+        if (e.isComposing) return;   // 한글 조합 중 Enter는 무시
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            done();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            close(original);
+        }
+    });
+    saveBtn.onclick = done;
+    cancelBtn.onclick = () => close(original);
+}
+
+// ───── 메시지 한 줄: 아바타 | 이름 · 시각 (수정됨) (· 1) [수정] [삭제] / 내용 ─────
+//   editedAt   : 수정한 시각 문자열이면 "(수정됨)" 표시
 //   unread     : true면 시각 옆에 "1" (DM에서 상대가 아직 안 읽음)
+//   onEdit     : 있으면 [수정] 버튼, 저장할 때 onEdit(새 내용) (글 메시지에만, 권한은 부르는 쪽에서 판단)
 //   onDelete   : 있으면 [삭제] 버튼 (권한은 부르는 쪽에서 판단)
 //   onImageLoad: 사진이 다 불러와지면 호출 (맨 아래 유지용)
-function messageLine({ id, name, mine, time, content, file, deleted, unread = false, onDelete = null, onImageLoad }) {
+function messageLine({ id, name, mine, time, content, file, deleted, editedAt = null, unread = false,
+    onDelete = null, onEdit = null, onImageLoad }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제할 때 찾기용
@@ -217,9 +311,12 @@ function messageLine({ id, name, mine, time, content, file, deleted, unread = fa
 
     if (deleted) {
         markDeleted(div);
-    } else if (onDelete) {
-        head.appendChild(deleteButton(onDelete));
+        return div;
     }
+    if (editedAt) setEditedMark(div, editedAt);
+    // 글 메시지에만 [수정] (사진·파일은 고칠 내용이 없음)
+    if (onEdit && !file) head.appendChild(editButton(() => startEdit(div, onEdit)));
+    if (onDelete) head.appendChild(deleteButton(onDelete));
     return div;
 }
 

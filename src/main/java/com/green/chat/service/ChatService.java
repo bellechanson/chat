@@ -86,4 +86,32 @@ public class ChatService {
 		}
 		m.delete(); // 변경 감지로 UPDATE
 	}
+
+	/**
+	 * 메시지 수정: 내 글 메시지만 (방장·관리자도 남의 메시지는 못 고침, 사진·파일 메시지는 수정 불가)
+	 *
+	 * @return 방 사람들에게 보낼 "수정됨" 신호
+	 */
+	@Transactional
+	public ChatMessage edit(Long roomId, Long messageId, String nickname, String content) {
+		ChatMessageEntity m = messageRepository.findById(messageId).filter(msg -> msg.getRoom().getId().equals(roomId))
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		if (!m.getSender().equals(nickname)) {
+			throw new IllegalArgumentException("내 메시지만 수정할 수 있습니다.");
+		}
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("삭제된 메시지는 수정할 수 없습니다.");
+		}
+		if (m.getAttachment() != null) {
+			throw new IllegalArgumentException("사진·파일 메시지는 수정할 수 없습니다.");
+		}
+		if (content.isEmpty()) {
+			throw new IllegalArgumentException("빈 메시지로는 수정할 수 없습니다.");
+		}
+		if (content.equals(m.getContent())) {
+			throw new IllegalArgumentException("바뀐 내용이 없습니다.");
+		}
+		m.edit(content); // 변경 감지로 UPDATE
+		return ChatMessage.edited(m);
+	}
 }

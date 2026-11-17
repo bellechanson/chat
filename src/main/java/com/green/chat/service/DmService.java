@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.DmConversationView;
+import com.green.chat.dto.DmEditedEvent;
 import com.green.chat.dto.DmMessageDto;
 import com.green.chat.dto.DmPage;
 import com.green.chat.entity.Attachment;
@@ -34,6 +35,10 @@ public class DmService {
 
 	// 보내기 결과: 화면용 메시지 + 상대 로그인 아이디(전송 대상)
 	public record Sent(DmMessageDto message, String partnerUsername) {
+	}
+
+	// 수정 결과: 화면에 보낼 신호 + 상대 로그인 아이디(전송 대상)
+	public record Edited(DmEditedEvent event, String partnerUsername) {
 	}
 
 	private final DmConversationRepository conversationRepository;
@@ -244,6 +249,40 @@ public class DmService {
 		}
 		m.delete(); // 변경 감지로 UPDATE
 		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
+	}
+
+	// ── 메시지 수정 (내 글 메시지만, 사진·파일 메시지는 수정 불가) ──
+	@Transactional
+	public Edited edit(Long conversationId, Long messageId, Long userId, String content) {
+		DmConversation c = member(conversationId, userId);
+		checkPartner(c, userId); // 상대가 탈퇴했으면 수정도 막음 (대화가 끝난 상태)
+
+		DmMessage m = messageRepository.findById(messageId)
+				.filter(msg -> msg.getConversation().getId().equals(conversationId))
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		if (!m.getSenderId().equals(userId)) {
+			throw new IllegalArgumentException("내 메시지만 수정할 수 있습니다.");
+		}
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("삭제된 메시지는 수정할 수 없습니다.");
+		}
+		if (m.getAttachment() != null) {
+			throw new IllegalArgumentException("사진·파일 메시지는 수정할 수 없습니다.");
+		}
+		String text = Formats.cut(content, MAX_CONTENT);
+		if (text.isEmpty()) {
+			throw new IllegalArgumentException("빈 메시지로는 수정할 수 없습니다.");
+		}
+		if (text.equals(m.getContent())) {
+			throw new IllegalArgumentException("바뀐 내용이 없습니다.");
+		}
+
+		m.edit(text); // 변경 감지로 UPDATE (lastMessageAt은 그대로 → 목록 순서·안 읽은 수 안 바뀜)
+		boolean last = !messageRepository.existsByConversationIdAndIdGreaterThan(conversationId, messageId);
+		DmEditedEvent event = new DmEditedEvent(conversationId, messageId, text, Formats.fullTime(m.getEditedAt()),
+				last);
+		String partnerUsername = userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
+		return new Edited(event, partnerUsername);
 	}
 
 	// 탈퇴한 사람에게는 보낼 수 없음

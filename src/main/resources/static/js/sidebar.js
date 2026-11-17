@@ -176,6 +176,14 @@ function watchSidebar(client) {
 
     client.subscribe('/user/queue/dm', f => onSideDm(JSON.parse(f.body), info));
 
+    // DM 수정 → 마지막 메시지였으면 미리보기 글만 바꿈 (순서·안 읽은 수는 그대로)
+    client.subscribe('/user/queue/dm-edited', f => {
+        const e = JSON.parse(f.body);
+        if (!e.last) return;
+        const preview = side.querySelector(`#sideDms li[data-conv-id="${e.conversationId}"] .side-preview`);
+        if (preview) preview.textContent = e.content;
+    });
+
     // 내가 (다른 탭에서) 대화방을 나감 → 목록에서 지우기, 그 대화를 보고 있었으면 홈으로
     client.subscribe('/user/queue/dm-hidden', f => {
         const e = JSON.parse(f.body);

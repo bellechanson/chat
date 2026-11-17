@@ -105,7 +105,12 @@
 			}
 			if (msg.type === 'MESSAGE_DELETED') {
 				const target = list.find(msg.id);
-				if (target) markDeleted(target);
+				if (target) markDeleted(target);   // 수정하던 메시지면 수정창도 닫힘
+				return;
+			}
+			if (msg.type === 'MESSAGE_EDITED') {
+				const target = list.find(msg.id);
+				if (target) markEdited(target, msg.content, msg.editedAt);   // 알림·안 읽은 수는 그대로
 				return;
 			}
 
@@ -143,9 +148,20 @@
 				content: msg.content,
 				file: msg.file,
 				deleted: msg.deleted,
+				editedAt: msg.editedAt,
+				// 내 글 메시지만 고칠 수 있음 (방장·관리자도 남의 메시지는 못 고침)
+				onEdit: msg.id && mine ? (text) => editMessage(msg.id, text) : null,
 				// 내 메시지, 또는 방장·관리자는 지울 수 있음
 				onDelete: msg.id && (mine || canManage) ? () => deleteMessage(msg.id) : null,
 				onImageLoad: list.keepBottom
+			});
+		}
+
+		function editMessage(id, content) {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/edit`,
+				body: JSON.stringify({id, content})
 			});
 		}
 

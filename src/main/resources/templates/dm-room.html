@@ -104,11 +104,18 @@
 			el('messages').querySelectorAll('.read-mark').forEach(mark => mark.remove());
 		}
 
-		// 삭제 신호 (내 다른 탭, 상대 화면 모두)
+		// 삭제 신호 (내 다른 탭, 상대 화면 모두) — 수정하던 메시지면 수정창도 닫힘
 		function onDeleted(e) {
 			if (e.conversationId !== convId) return;
 			const target = list.find(e.messageId);
 			if (target) markDeleted(target);
+		}
+
+		// 수정 신호 (내 다른 탭, 상대 화면 모두): 내용 교체 + "(수정됨)", 알림·안 읽은 수는 그대로
+		function onEdited(e) {
+			if (e.conversationId !== convId) return;
+			const target = list.find(e.messageId);
+			if (target) markEdited(target, e.content, e.editedAt);
 		}
 
 		// 상대 접속 상태 (머리의 초록 점, "접속 중"/"오프라인")
@@ -131,9 +138,19 @@
 				content: m.content,
 				file: m.file,
 				deleted: m.deleted,
+				editedAt: m.editedAt,
 				unread: mine && !m.read,                                // 상대가 안 읽은 내 메시지에 "1"
+				onEdit: mine && canSend ? (text) => editMessage(m.id, text) : null,   // 내 글 메시지만 (상대 탈퇴 시 막힘)
 				onDelete: mine ? () => deleteMessage(m.id) : null,      // DM은 내 메시지만 삭제 가능
 				onImageLoad: list.keepBottom
+			});
+		}
+
+		function editMessage(id, content) {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/dm/${convId}/edit`,
+				body: JSON.stringify({id, content})
 			});
 		}
 
@@ -213,6 +230,7 @@
 			c.subscribe('/user/queue/dm-read', f => onRead(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-typing', f => onTyping(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-deleted', f => onDeleted(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-edited', f => onEdited(JSON.parse(f.body)));
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
 			markRead();
 			el('content')?.focus();
