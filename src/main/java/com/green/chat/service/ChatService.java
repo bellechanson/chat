@@ -3,6 +3,7 @@ package com.green.chat.service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -11,9 +12,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.MessagePage;
+import com.green.chat.dto.ReactionDto;
+import com.green.chat.dto.ReactionEvent;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatMessageEntity;
 import com.green.chat.entity.ChatRoom;
+import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatMessageRepository;
 import com.green.chat.repository.ChatRoomRepository;
 
@@ -26,12 +30,14 @@ public class ChatService {
 	private final ChatRoomRepository roomRepository;
 	private final ChatMessageRepository messageRepository;
 	private final FileStorage fileStorage;
+	private final ReactionService reactionService;
 
 	public ChatService(ChatRoomRepository roomRepository, ChatMessageRepository messageRepository,
-			FileStorage fileStorage) {
+			FileStorage fileStorage, ReactionService reactionService) {
 		this.roomRepository = roomRepository;
 		this.messageRepository = messageRepository;
 		this.fileStorage = fileStorage;
+		this.reactionService = reactionService;
 	}
 
 	@Transactional
@@ -63,7 +69,12 @@ public class ChatService {
 		List<ChatMessageEntity> page = new ArrayList<>(hasMore ? rows.subList(0, PAGE_SIZE) : rows);
 		Collections.reverse(page); // 최신순 → 오래된순 (화면 표시 순서)
 
-		return new MessagePage(page.stream().map(ChatMessage::from).toList(), hasMore);
+		// 이 묶음의 반응을 한 번에 가져와서 메시지마다 붙임
+		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.ROOM,
+				page.stream().map(ChatMessageEntity::getId).toList());
+		return new MessagePage(
+				page.stream().map(e -> ChatMessage.from(e, reactions.getOrDefault(e.getId(), List.of()))).toList(),
+				hasMore);
 	}
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)
@@ -113,5 +124,21 @@ public class ChatService {
 		}
 		m.edit(content); // 변경 감지로 UPDATE
 		return ChatMessage.edited(m);
+	}
+
+	/**
+	 * 이모지 반응 누르기 (이 방의, 삭제 안 된 메시지만 — 사진·파일 메시지에도 가능)
+	 *
+	 * @return 방 사람들에게 보낼 "반응 바뀜" 신호
+	 */
+	@Transactional
+	public ReactionEvent react(Long roomId, Long messageId, Long userId, String emoji) {
+		ChatMessageEntity m = messageRepository.findById(messageId).filter(msg -> msg.getRoom().getId().equals(roomId))
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("삭제된 메시지에는 반응할 수 없습니다.");
+		}
+		List<ReactionDto> reactions = reactionService.toggle(MessageReaction.ROOM, messageId, userId, emoji);
+		return new ReactionEvent(null, messageId, reactions);
 	}
 }

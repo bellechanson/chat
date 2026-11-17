@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.MessageType;
 import com.green.chat.dto.NotifyEvent;
+import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.RoomActivity;
 import com.green.chat.dto.RoomSummary;
 import com.green.chat.dto.RoomTypingEvent;
@@ -34,6 +35,11 @@ public class RoomNotifier {
 	// 방 안의 모든 사람에게 (대화, 입장/퇴장, 강퇴, 삭제 알림)
 	public void toRoom(Long roomId, ChatMessage message) {
 		messagingTemplate.convertAndSend("/topic/room/" + roomId, message);
+	}
+
+	// 이모지 반응이 바뀜 → 방 안 사람들 (알림·안 읽은 수는 건드리지 않음)
+	public void reactions(Long roomId, ReactionEvent event) {
+		messagingTemplate.convertAndSend("/topic/room/" + roomId + "/reactions", event);
 	}
 
 	// 새 메시지(글, 파일) → 방 안 사람들 + 방 목록 안 읽은 수 + 데스크톱 알림

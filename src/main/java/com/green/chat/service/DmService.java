@@ -17,10 +17,13 @@ import com.green.chat.dto.DmConversationView;
 import com.green.chat.dto.DmEditedEvent;
 import com.green.chat.dto.DmMessageDto;
 import com.green.chat.dto.DmPage;
+import com.green.chat.dto.ReactionDto;
+import com.green.chat.dto.ReactionEvent;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatUser;
 import com.green.chat.entity.DmConversation;
 import com.green.chat.entity.DmMessage;
+import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatUserRepository;
 import com.green.chat.repository.DmConversationRepository;
 import com.green.chat.repository.DmMessageRepository;
@@ -41,17 +44,23 @@ public class DmService {
 	public record Edited(DmEditedEvent event, String partnerUsername) {
 	}
 
+	// 반응 결과: 화면에 보낼 신호 + 상대 로그인 아이디(전송 대상)
+	public record Reacted(ReactionEvent event, String partnerUsername) {
+	}
+
 	private final DmConversationRepository conversationRepository;
 	private final DmMessageRepository messageRepository;
 	private final ChatUserRepository userRepository;
 	private final FileStorage fileStorage;
+	private final ReactionService reactionService;
 
 	public DmService(DmConversationRepository conversationRepository, DmMessageRepository messageRepository,
-			ChatUserRepository userRepository, FileStorage fileStorage) {
+			ChatUserRepository userRepository, FileStorage fileStorage, ReactionService reactionService) {
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.userRepository = userRepository;
 		this.fileStorage = fileStorage;
+		this.reactionService = reactionService;
 	}
 
 	// ── 대화 시작: 있으면 기존 대화, 없으면 새로 ──
@@ -180,9 +189,13 @@ public class DmService {
 		Collections.reverse(page);
 
 		Map<Long, String> names = nicknames(c);
+		// 이 묶음의 반응을 한 번에 가져와서 메시지마다 붙임
+		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.DM,
+				page.stream().map(DmMessage::getId).toList());
 		return new DmPage(page.stream()
-				.map(m -> DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME))).toList(),
-				hasMore);
+				.map(m -> DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
+						reactions.getOrDefault(m.getId(), List.of())))
+				.toList(), hasMore);
 	}
 
 	// ── 보내기 ──
@@ -283,6 +296,24 @@ public class DmService {
 				last);
 		String partnerUsername = userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
 		return new Edited(event, partnerUsername);
+	}
+
+	// ── 이모지 반응 (상대·내 메시지 모두, 사진·파일 포함): 같은 걸 다시 누르면 취소, 다른 걸 누르면 바뀜 ──
+	@Transactional
+	public Reacted react(Long conversationId, Long messageId, Long userId, String emoji) {
+		DmConversation c = member(conversationId, userId);
+		checkPartner(c, userId); // 상대가 탈퇴했으면 막음 (대화가 끝난 상태)
+
+		DmMessage m = messageRepository.findById(messageId)
+				.filter(msg -> msg.getConversation().getId().equals(conversationId))
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("삭제된 메시지에는 반응할 수 없습니다.");
+		}
+
+		List<ReactionDto> reactions = reactionService.toggle(MessageReaction.DM, messageId, userId, emoji);
+		String partnerUsername = userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
+		return new Reacted(new ReactionEvent(conversationId, messageId, reactions), partnerUsername);
 	}
 
 	// 탈퇴한 사람에게는 보낼 수 없음

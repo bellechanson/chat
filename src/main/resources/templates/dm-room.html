@@ -139,11 +139,29 @@
 				file: m.file,
 				deleted: m.deleted,
 				editedAt: m.editedAt,
+				reactions: m.reactions,
+				myId,
+				onReact: canSend ? (emoji) => react(m.id, emoji) : null,   // 누구 메시지든 반응 (상대 탈퇴 시 보기만)
 				unread: mine && !m.read,                                // 상대가 안 읽은 내 메시지에 "1"
 				onEdit: mine && canSend ? (text) => editMessage(m.id, text) : null,   // 내 글 메시지만 (상대 탈퇴 시 막힘)
 				onDelete: mine ? () => deleteMessage(m.id) : null,      // DM은 내 메시지만 삭제 가능
 				onImageLoad: list.keepBottom
 			});
+		}
+
+		function react(id, emoji) {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/dm/${convId}/react`,
+				body: JSON.stringify({id, emoji})
+			});
+		}
+
+		// 반응이 바뀜 (나·상대·내 다른 탭) → 그 메시지의 칩 전체를 새로 그림
+		function onReactions(e) {
+			if (e.conversationId !== convId) return;
+			const target = list.find(e.messageId);
+			if (target && !target.classList.contains('deleted')) setReactions(target, e.reactions);
 		}
 
 		function editMessage(id, content) {
@@ -231,6 +249,7 @@
 			c.subscribe('/user/queue/dm-typing', f => onTyping(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-deleted', f => onDeleted(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-edited', f => onEdited(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-reactions', f => onReactions(JSON.parse(f.body)));
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
 			markRead();
 			el('content')?.focus();

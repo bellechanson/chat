@@ -677,3 +677,115 @@
 	outline-offset: 2px;
 	border-radius: 2px;
 }
+
+
+/* ───── 이모지 반응 (messages.js의 setReactions, openReactPicker) ───── */
+/* 마우스를 올리면 [반응] [수정] [삭제] — 맨 앞 버튼이 오른쪽 끝으로 밀어 줌 */
+.react-btn {
+	margin-left: auto;
+	padding: 0 6px;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	font-size: 12px;
+	cursor: pointer;
+	visibility: hidden;
+}
+
+.react-btn+.edit-btn,
+.react-btn+.del-btn {
+	margin-left: 0;
+}
+
+.msg:hover .react-btn,
+.react-btn:focus-visible {
+	visibility: visible;
+}
+
+.react-btn:hover {
+	color: var(--accent-ink);
+}
+
+.msg.editing .react-btn {
+	display: none;
+}
+
+/* 메시지 아래 반응 칩: 👍 3 */
+.reactions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.react-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--line-strong);
+	border-radius: 999px;
+	background: #FFFFFF;
+	color: var(--ink);
+	font: inherit;
+	font-size: 13px;
+	line-height: 1;
+	cursor: default;
+}
+
+button.react-chip {
+	cursor: pointer;
+}
+
+button.react-chip:hover {
+	border-color: var(--accent);
+}
+
+/* 내가 누른 반응 */
+.react-chip.mine {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+}
+
+.react-chip .e {
+	font-size: 15px;
+}
+
+.react-chip .n {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+/* 이모지 고르는 작은 창 */
+.react-picker {
+	position: fixed;
+	z-index: 100;
+	display: flex;
+	gap: 2px;
+	padding: 4px;
+	border: 1px solid var(--line-strong);
+	border-radius: 999px;
+	background: #FFFFFF;
+	box-shadow: 0 8px 24px rgba(60, 40, 20, .14);
+}
+
+.react-picker button {
+	width: 36px;
+	height: 36px;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	font-size: 20px;
+	line-height: 1;
+	cursor: pointer;
+	transition: transform .1s ease;
+}
+
+.react-picker button:hover,
+.react-picker button:focus-visible {
+	background: var(--side);
+	outline: none;
+	transform: scale(1.15);
+}

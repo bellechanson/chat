@@ -61,6 +61,7 @@
 		const ownerNickname = /*[[${ownerNickname}]]*/ null;
 
 		const el = id => document.getElementById(id);
+		const myId = sidebarInfo()?.myId;   // 내 id (반응 칩에서 내가 누른 것 표시용, sidebar.js)
 
 		let client = null;
 		let leaving = false;
@@ -149,12 +150,30 @@
 				file: msg.file,
 				deleted: msg.deleted,
 				editedAt: msg.editedAt,
+				reactions: msg.reactions,
+				myId,
+				// 저장된 메시지면 누구나 반응 (같은 걸 다시 누르면 취소, 다른 걸 누르면 바뀜)
+				onReact: msg.id ? (emoji) => react(msg.id, emoji) : null,
 				// 내 글 메시지만 고칠 수 있음 (방장·관리자도 남의 메시지는 못 고침)
 				onEdit: msg.id && mine ? (text) => editMessage(msg.id, text) : null,
 				// 내 메시지, 또는 방장·관리자는 지울 수 있음
 				onDelete: msg.id && (mine || canManage) ? () => deleteMessage(msg.id) : null,
 				onImageLoad: list.keepBottom
 			});
+		}
+
+		function react(id, emoji) {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/react`,
+				body: JSON.stringify({id, emoji})
+			});
+		}
+
+		// 반응이 바뀜 (누가 누르거나 취소) → 그 메시지의 칩 전체를 새로 그림
+		function onReactions(e) {
+			const target = list.find(e.messageId);
+			if (target && !target.classList.contains('deleted')) setReactions(target, e.reactions);
 		}
 
 		function editMessage(id, content) {
@@ -348,6 +367,7 @@
 			c.subscribe(`/topic/room/${roomId}`, f => handleMessage(JSON.parse(f.body)));
 			c.subscribe(`/topic/room/${roomId}/users`, f => renderUsers(JSON.parse(f.body)));
 			c.subscribe(`/topic/room/${roomId}/typing`, f => onTyping(JSON.parse(f.body)));
+			c.subscribe(`/topic/room/${roomId}/reactions`, f => onReactions(JSON.parse(f.body)));
 			c.publish({destination: `/app/chat/${roomId}/enter`});
 			el('content').focus();
 		}, roomId);

@@ -15,6 +15,8 @@ import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.DeleteRequest;
 import com.green.chat.dto.EditRequest;
 import com.green.chat.dto.MessageType;
+import com.green.chat.dto.ReactRequest;
+import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.TypingRequest;
 import com.green.chat.security.LoginUser;
 import com.green.chat.service.ChatService;
@@ -130,6 +132,21 @@ public class ChatController {
 			notifier.toRoom(roomId, edited);
 		} catch (IllegalArgumentException e) {
 			log.warn("[메시지 수정 실패] room={}, msg={}, reason={}", roomId, request.id(), e.getMessage());
+		}
+	}
+
+	// 이모지 반응: 같은 걸 다시 누르면 취소, 다른 걸 누르면 바뀜 → 방 안 모두의 화면에 반영 (조용히)
+	@MessageMapping("/chat/{roomId}/react")
+	public void react(@DestinationVariable Long roomId, @Payload ReactRequest request, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null || !roomService.canJoin(roomId, user.getId()))
+			return;
+
+		try {
+			ReactionEvent event = chatService.react(roomId, request.id(), user.getId(), request.emoji());
+			notifier.reactions(roomId, event);
+		} catch (IllegalArgumentException e) {
+			log.warn("[반응 실패] room={}, msg={}, reason={}", roomId, request.id(), e.getMessage());
 		}
 	}
 

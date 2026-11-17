@@ -214,6 +214,128 @@ function fillWithLinks(el, text) {
     });
 }
 
+// ───── 이모지 반응 ─────
+// 서버 ReactionService.EMOJIS와 같은 이름·순서 (DB에는 이름으로 저장)
+const REACTIONS = [
+    { key: 'like', emoji: '👍', label: '좋아요' },
+    { key: 'heart', emoji: '❤️', label: '하트' },
+    { key: 'laugh', emoji: '😂', label: '웃겨요' },
+    { key: 'wow', emoji: '😮', label: '놀라워요' },
+    { key: 'sad', emoji: '😢', label: '슬퍼요' },
+    { key: 'pray', emoji: '🙏', label: '고마워요' }
+];
+const REACTION_INFO = Object.fromEntries(REACTIONS.map(r => [r.key, r]));
+
+// 메시지 아래 반응 칩 그리기 (처음 그릴 때, 실시간으로 바뀔 때 모두)
+//   reactions: [{ emoji: 'like', userIds: [1, 2], names: ['철수', '영희'] }, ...]
+//   내가 누른 칩은 .mine (주황 테두리), 칩을 누르면 같은 반응이면 취소 / 다른 반응이면 바꿈
+function setReactions(div, reactions) {
+    const onReact = div._onReact;   // messageLine에서 넣어 둔 "반응 누르기" 함수 (없으면 보기만)
+    const myId = div._myId;
+    let bar = div.querySelector('.reactions');
+    const list = (reactions || []).filter(r => REACTION_INFO[r.emoji] && r.userIds.length > 0);
+    if (list.length === 0) {
+        bar?.remove();
+        return;
+    }
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'reactions';
+        div.querySelector('.msg-main').appendChild(bar);
+    }
+    bar.replaceChildren(...list.map(r => {
+        const info = REACTION_INFO[r.emoji];
+        const mine = r.userIds.some(id => String(id) === String(myId));
+        const chip = document.createElement(onReact ? 'button' : 'span');
+        chip.className = 'react-chip' + (mine ? ' mine' : '');
+        // 누가 눌렀는지 (마우스를 올리면 보임, 실시간으로 함께 바뀜)
+        chip.title = `${r.names.join(', ')}님이 ${info.emoji} 반응`
+            + (onReact ? (mine ? ' · 누르면 취소' : ' · 누르면 나도 이 반응') : '');
+        if (onReact) {
+            chip.type = 'button';
+            chip.setAttribute('aria-pressed', mine);
+            chip.onclick = () => onReact(r.emoji);
+        }
+        const e = document.createElement('span');
+        e.className = 'e';
+        e.textContent = info.emoji;
+        const n = document.createElement('span');
+        n.className = 'n';
+        n.textContent = r.userIds.length;
+        chip.append(e, n);
+        return chip;
+    }));
+}
+
+// 이모지 고르는 작은 창 (하나를 만들어 두고 위치만 옮겨 씀)
+let reactPicker = null;
+
+function closeReactPicker() {
+    if (!reactPicker) return;
+    reactPicker.classList.add('hidden');
+    reactPicker._owner = null;
+}
+
+function openReactPicker(button, onPick) {
+    if (!reactPicker) {
+        reactPicker = document.createElement('div');
+        reactPicker.className = 'react-picker hidden';
+        reactPicker.setAttribute('role', 'menu');
+        reactPicker.setAttribute('aria-label', '반응 고르기');
+        document.body.appendChild(reactPicker);
+        // 창 밖을 누르거나 Esc, 스크롤, 창 크기 변경이면 닫기
+        document.addEventListener('mousedown', (e) => {
+            if (!reactPicker.contains(e.target) && !e.target.closest('.react-btn')) closeReactPicker();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeReactPicker();
+        });
+        window.addEventListener('resize', closeReactPicker);
+        document.addEventListener('scroll', closeReactPicker, true);
+    }
+    // 같은 버튼을 다시 누르면 닫기
+    if (reactPicker._owner === button && !reactPicker.classList.contains('hidden')) {
+        closeReactPicker();
+        return;
+    }
+
+    reactPicker.replaceChildren(...REACTIONS.map(r => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'menuitem');
+        b.setAttribute('aria-label', r.label);
+        b.title = r.label;
+        b.textContent = r.emoji;
+        b.onclick = () => {
+            closeReactPicker();
+            onPick(r.key);
+        };
+        return b;
+    }));
+    reactPicker._owner = button;
+    reactPicker.classList.remove('hidden');
+
+    // 버튼 위쪽에 (공간이 없으면 아래쪽에), 화면 밖으로 나가지 않게
+    const rect = button.getBoundingClientRect();
+    const w = reactPicker.offsetWidth, h = reactPicker.offsetHeight;
+    const left = Math.max(8, Math.min(rect.right - w, window.innerWidth - w - 8));
+    let top = rect.top - h - 6;
+    if (top < 8) top = rect.bottom + 6;
+    reactPicker.style.left = left + 'px';
+    reactPicker.style.top = top + 'px';
+    reactPicker.querySelector('button').focus();
+}
+
+function reactButton(onClick) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'react-btn';
+    btn.textContent = '반응';
+    btn.title = '반응 달기';
+    btn.onclick = () => onClick(btn);
+    return btn;
+}
+
 // ───── 메시지 삭제 ─────
 function deleteButton(onClick) {
     const btn = document.createElement('button');
@@ -224,13 +346,16 @@ function deleteButton(onClick) {
 }
 
 // 삭제 표시 (수정하던 중이었으면 수정창도 같이 닫힘 — 말풍선 내용을 통째로 바꾸므로)
+//   반응 칩·반응 버튼도 없앰 (고르는 창이 이 메시지 것이면 닫음)
 function markDeleted(div) {
     div.classList.add('deleted');
     div.classList.remove('editing');
     const bubble = div.querySelector('.bubble');
     bubble.classList.remove('has-img', 'has-file');
     bubble.textContent = '삭제된 메시지입니다';
-    div.querySelectorAll('.del-btn, .edit-btn, .msg-edited').forEach(b => b.remove());
+    if (reactPicker && reactPicker._owner && div.contains(reactPicker._owner)) closeReactPicker();
+    div._onReact = null;
+    div.querySelectorAll('.del-btn, .edit-btn, .react-btn, .msg-edited, .reactions').forEach(b => b.remove());
 }
 
 // ───── 메시지 수정 ─────
@@ -322,14 +447,16 @@ function startEdit(div, save) {
     cancelBtn.onclick = () => close(original);
 }
 
-// ───── 메시지 한 줄: 아바타 | 이름 · 시각 (수정됨) (· 1) [수정] [삭제] / 내용 ─────
+// ───── 메시지 한 줄: 아바타 | 이름 · 시각 (수정됨) (· 1) [반응] [수정] [삭제] / 내용 / 반응 칩 ─────
 //   editedAt   : 수정한 시각 문자열이면 "(수정됨)" 표시
+//   reactions  : 반응 칩 목록 (setReactions), myId: 내 id (내가 누른 칩 표시용)
+//   onReact    : 있으면 [반응] 버튼 + 칩 누르기, onReact(이모지 이름)
 //   unread     : true면 시각 옆에 "1" (DM에서 상대가 아직 안 읽음)
 //   onEdit     : 있으면 [수정] 버튼, 저장할 때 onEdit(새 내용) (글 메시지에만, 권한은 부르는 쪽에서 판단)
 //   onDelete   : 있으면 [삭제] 버튼 (권한은 부르는 쪽에서 판단)
 //   onImageLoad: 사진이 다 불러와지면 호출 (맨 아래 유지용)
 function messageLine({ id, name, mine, time, content, file, deleted, editedAt = null, unread = false,
-    onDelete = null, onEdit = null, onImageLoad }) {
+    reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, onImageLoad }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제할 때 찾기용
@@ -375,9 +502,14 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
         return div;
     }
     if (editedAt) setEditedMark(div, editedAt);
+    // [반응]은 글·사진·파일 모두에
+    div._myId = myId;
+    div._onReact = onReact;
+    if (onReact) head.appendChild(reactButton(btn => openReactPicker(btn, onReact)));
     // 글 메시지에만 [수정] (사진·파일은 고칠 내용이 없음)
     if (onEdit && !file) head.appendChild(editButton(() => startEdit(div, onEdit)));
     if (onDelete) head.appendChild(deleteButton(onDelete));
+    setReactions(div, reactions);
     return div;
 }
 

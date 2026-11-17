@@ -13,6 +13,7 @@ import org.springframework.stereotype.Controller;
 import com.green.chat.dto.DeleteRequest;
 import com.green.chat.dto.DmDeletedEvent;
 import com.green.chat.dto.EditRequest;
+import com.green.chat.dto.ReactRequest;
 import com.green.chat.dto.DmReadEvent;
 import com.green.chat.dto.DmTypingEvent;
 import com.green.chat.dto.SendRequest;
@@ -115,6 +116,25 @@ public class DmSocketController {
 			}
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 수정 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
+		}
+	}
+
+	// /app/dm/{id}/react : 이모지 반응 → 나(다른 탭 포함)와 상대 화면에 반영 (알림·안 읽은 수는 그대로)
+	@MessageMapping("/dm/{conversationId}/react")
+	public void react(@DestinationVariable Long conversationId, @Payload ReactRequest request, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null)
+			return;
+
+		try {
+			DmService.Reacted reacted = dmService.react(conversationId, request.id(), user.getId(), request.emoji());
+			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-reactions", reacted.event());
+			if (reacted.partnerUsername() != null) {
+				messagingTemplate.convertAndSendToUser(reacted.partnerUsername(), "/queue/dm-reactions",
+						reacted.event());
+			}
+		} catch (IllegalArgumentException e) {
+			log.warn("[DM 반응 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
 		}
 	}
 }
