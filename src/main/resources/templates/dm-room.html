@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title th:text="${partnerNickname} + ' - 실시간 채팅'">1:1 대화</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/chat.css}">
+	<meta name="_csrf" th:content="${_csrf.token}">
+	<meta name="_csrf_header" th:content="${_csrf.headerName}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+	<script th:src="@{/js/messages.js}"></script>
+	<script th:src="@{/js/files.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('dm', ${conversationId})}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<div class="dm-head">
+					<span class="avatar" th:classappend="'av-' + ${partnerTint}"><span
+							th:text="${partnerInitial}">영</span><span class="presence" id="partnerDot"
+							th:classappend="${partnerOnline} ? 'on'"></span></span>
+					<div>
+						<h1 th:text="${partnerNickname}">영희</h1>
+						<span class="dm-status" id="partnerStatus" th:classappend="${partnerOnline} ? 'on'"
+							th:text="${partnerOnline} ? '접속 중' : '오프라인'">접속 중</span>
+					</div>
+				</div>
+			</header>
+
+			<div id="messages" class="messages"></div>
+
+			<div th:replace="~{fragments/parts :: composer(placeholder=${partnerNickname + '님에게 메시지 보내기'})}"></div>
+		</main>
+	</div>
+
+	<script th:inline="javascript">
+		const convId = /*[[${conversationId}]]*/ 0;
+		const myId = /*[[${myId}]]*/ 0;
+		const partnerId = /*[[${partnerId}]]*/ 0;
+
+		const el = id => document.getElementById(id);
+
+		let client = null;
+
+		// ── 메시지 목록 (이전 대화 더보기, 날짜 구분선, 스크롤 → messages.js) ──
+		const list = createMessageList({
+			box: el('messages'),
+			fetchPage: async (before) => {
+				const res = await fetch(before
+					? `/api/dm/${convId}/messages?before=${before}`
+					: `/api/dm/${convId}/messages`);
+				return res.ok ? res.json() : null;
+			},
+			build: buildMessage
+		});
+
+		// ── 읽음 처리: 화면을 보고 있을 때만 ──
+		function markRead() {
+			if (client && client.connected && document.visibilityState === 'visible') {
+				client.publish({destination: `/app/dm/${convId}/read`});
+			}
+		}
+
+		// 다른 탭을 보다가 돌아오면 읽음 처리
+		document.addEventListener('visibilitychange', markRead);
+
+		// ── 받은 메시지 ──
+		function onMessage(m) {
+			if (m.conversationId !== convId) return;   // 다른 대화는 무시
+
+			const mine = m.senderId === myId;
+			if (!mine) hideTyping();                   // 메시지가 왔으니 "입력 중" 끝
+
+			list.append(buildMessage(m), mine, m.date);
+
+			if (!mine) markRead();                     // 보고 있으니 바로 읽음
+		}
+
+		// 상대가 읽었음 → 내 메시지의 "1" 모두 제거
+		function onRead(e) {
+			if (e.conversationId !== convId || e.readerId === myId) return;
+			el('messages').querySelectorAll('.read-mark').forEach(mark => mark.remove());
+		}
+
+		// 삭제 신호 (내 다른 탭, 상대 화면 모두)
+		function onDeleted(e) {
+			if (e.conversationId !== convId) return;
+			const target = list.find(e.messageId);
+			if (target) markDeleted(target);
+		}
+
+		// 상대 접속 상태 (머리의 초록 점, "접속 중"/"오프라인")
+		function onOnline(ids) {
+			const on = ids.map(String).includes(String(partnerId));
+			el('partnerDot').classList.toggle('on', on);
+			el('partnerStatus').classList.toggle('on', on);
+			el('partnerStatus').textContent = on ? '접속 중' : '오프라인';
+		}
+
+		// ── 메시지 하나 (messages.js의 messageLine) ──
+		function buildMessage(m) {
+			const mine = m.senderId === myId;
+			return messageLine({
+				id: m.id,
+				name: m.senderNickname,
+				mine,
+				time: m.time,
+				content: m.content,
+				file: m.file,
+				deleted: m.deleted,
+				unread: mine && !m.read,                                // 상대가 안 읽은 내 메시지에 "1"
+				onDelete: mine ? () => deleteMessage(m.id) : null,      // DM은 내 메시지만 삭제 가능
+				onImageLoad: list.keepBottom
+			});
+		}
+
+		function deleteMessage(id) {
+			if (!confirm('메시지를 삭제할까요?\n상대 화면에서도 "삭제된 메시지입니다"로 바뀝니다.')) return;
+			client.publish({
+				destination: `/app/dm/${convId}/delete`,
+				body: JSON.stringify({id})
+			});
+		}
+
+		// ── 입력 중 표시 ──
+		const TYPING_SHOW_MS = 4000;   // 신호가 이 시간 동안 안 오면 숨김
+		let typingHideTimer = null;
+
+		// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
+		const typing = watchTyping(el('content'), (on) => {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/dm/${convId}/typing`,
+				body: JSON.stringify({typing: on})
+			});
+		});
+
+		function onTyping(e) {
+			if (e.conversationId !== convId) return;
+			if (!e.typing) return hideTyping();
+
+			el('typingText').textContent = `${e.nickname}님이 입력 중`;
+			el('typing').classList.add('on');
+			clearTimeout(typingHideTimer);
+			typingHideTimer = setTimeout(hideTyping, TYPING_SHOW_MS);
+		}
+
+		function hideTyping() {
+			clearTimeout(typingHideTimer);
+			el('typing').classList.remove('on');
+		}
+
+		// ── 보내기 ──
+		function sendMessage() {
+			const input = el('content');
+			const content = input.value.trim();
+			if (!content || !client || !client.connected) return;
+
+			client.publish({
+				destination: `/app/dm/${convId}/send`,
+				body: JSON.stringify({content})
+			});
+			input.value = '';
+			input.focus();
+			typing.sent();
+		}
+
+		el('sendBtn').onclick = sendMessage;
+		el('content').addEventListener('keydown', e => {
+			if (e.key === 'Enter' && !e.isComposing) sendMessage();
+		});
+
+		// [첨부] 버튼, 붙여넣기 (files.js)
+		setupAttach({
+			button: el('attachBtn'),
+			input: el('fileInput'),
+			textInput: el('content'),
+			uploadUrl: `/api/dm/${convId}/files`
+		});
+
+		// ── 실시간 연결 ──
+		client = connectSocket(async (c) => {
+			await list.loadFirst();
+			c.subscribe('/user/queue/dm', f => onMessage(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-read', f => onRead(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-typing', f => onTyping(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-deleted', f => onDeleted(JSON.parse(f.body)));
+			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
+			markRead();
+			el('content').focus();
+		});
+	</script>
+</body>
+
+</html>

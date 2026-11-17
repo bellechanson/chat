@@ -1,0 +1,671 @@
+/* ═════════ 새 디자인 공통 (B 시안) ═════════ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap');
+
+/* 색: 바꾸고 싶으면 여기만 */
+:root {
+	--accent: #D9480F;
+	/* 주황: 버튼, 내 강조 */
+	--accent-hover: #C2410C;
+	--accent-soft: #FDEEE5;
+	/* 주황 연한 배경 */
+	--accent-ink: #9A3412;
+	/* 연한 배경 위 주황 글씨 */
+	--ink: #1F1B17;
+	/* 본문 글씨 */
+	--ink-2: #46403A;
+	/* 보조 글씨 */
+	--muted: #5F5850;
+	/* 흐린 글씨 (흰 배경에서도 충분히 읽힘) */
+	--faint: #8C8379;
+	/* 장식용 */
+	--line: #EFEBE6;
+	/* 얇은 구분선 */
+	--line-strong: #D9D2CA;
+	/* 입력칸 테두리 */
+	--side: #F7F5F2;
+	/* 사이드바 배경 */
+	--side-line: #E8E3DD;
+	--danger: #B42318;
+	--danger-line: #F1CACA;
+	--danger-soft: #FDE8E6;
+	--online: #2FB36B;
+	--online-ink: #2E7D4F;
+	--radius: 10px;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: 'IBM Plex Sans KR', 'Malgun Gothic', sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--ink);
+	background: #FFFFFF;
+}
+
+h1,
+h2,
+h3,
+p {
+	margin: 0;
+}
+
+a {
+	color: inherit;
+}
+
+ul {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.hidden {
+	display: none !important;
+}
+
+/* 화면에는 안 보이고 화면 읽기 프로그램만 읽는 글자 */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* ───────── 버튼 · 입력칸 ───────── */
+.btn {
+	height: 40px;
+	padding: 0 16px;
+	border: 1px solid var(--line-strong);
+	border-radius: 8px;
+	background: #FFFFFF;
+	color: var(--ink);
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	text-decoration: none;
+}
+
+.btn:hover {
+	background: #FAF8F5;
+}
+
+.btn-primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: #FFFFFF;
+}
+
+.btn-primary:hover {
+	background: var(--accent-hover);
+}
+
+.btn-danger {
+	border-color: var(--danger-line);
+	color: var(--danger);
+	font-weight: 500;
+}
+
+.btn-danger:hover {
+	background: var(--danger-soft);
+}
+
+.btn-sm {
+	height: 32px;
+	padding: 0 12px;
+	font-size: 13px;
+}
+
+.btn:disabled {
+	opacity: .5;
+	cursor: default;
+}
+
+/* 아이콘만 있는 버튼 */
+.icon-btn {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--muted);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.icon-btn:hover,
+.icon-btn.on {
+	background: rgba(60, 40, 20, .07);
+	color: var(--ink);
+}
+
+.icon-btn.sm {
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+}
+
+.field {
+	height: 44px;
+	padding: 0 14px;
+	border: 1px solid var(--line-strong);
+	border-radius: var(--radius);
+	background: #FFFFFF;
+	outline: none;
+	min-width: 0;
+}
+
+.field:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 안내 / 오류 문구 */
+.alert {
+	padding: 10px 14px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.alert-info {
+	background: var(--accent-soft);
+	color: #8A2E0C;
+}
+
+.alert-error {
+	background: var(--danger-soft);
+	color: var(--danger);
+}
+
+/* ───────── 아바타 · 접속 점 · 숫자 뱃지 ───────── */
+.avatar {
+	position: relative;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border-radius: 10px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 700;
+	font-size: 14px;
+}
+
+.avatar-sm {
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	font-size: 12px;
+}
+
+.avatar-accent {
+	background: var(--accent);
+	color: #FFFFFF;
+}
+
+/* 이름별 색 (Formats.tint / sidebar.js tintOf와 같은 번호) */
+.av-0 {
+	background: #FCE7EC;
+	color: #A3213F;
+}
+
+.av-1 {
+	background: #DDEBFB;
+	color: #1D5394;
+}
+
+.av-2 {
+	background: #E3F2EA;
+	color: #1E6B43;
+}
+
+.av-3 {
+	background: #EFE7FB;
+	color: #5B2E9C;
+}
+
+.av-4 {
+	background: #FFF1CC;
+	color: #7A4F00;
+}
+
+.av-5 {
+	background: #E2F3F6;
+	color: #0F5E6E;
+}
+
+/* 아바타 오른쪽 아래 초록 점 (on일 때만 보임) */
+.presence {
+	position: absolute;
+	right: -2px;
+	bottom: -2px;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--online);
+	border: 2px solid var(--side);
+	display: none;
+}
+
+.presence.on {
+	display: block;
+}
+
+.unread {
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	flex-shrink: 0;
+	border-radius: 10px;
+	background: var(--accent);
+	color: #FFFFFF;
+	font-size: 11px;
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* ───────── 화면 뼈대: 왼쪽 사이드바 + 오른쪽 본문 ───────── */
+.shell {
+	display: flex;
+	height: 100vh;
+}
+
+.pane {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.pane-header {
+	height: 64px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 0 28px;
+	border-bottom: 1px solid var(--line);
+}
+
+.pane-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+/* 앱 창: 제목 표시줄과 구분선 */
+@media (display-mode: standalone) {
+	.shell {
+		border-top: 1px solid rgba(0, 0, 0, .12);
+	}
+}
+
+/* ───────── 사이드바 ───────── */
+.sidebar {
+	width: 288px;
+	height: 100%;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--side);
+	border-right: 1px solid var(--side-line);
+}
+
+.side-me {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 16px 16px 12px;
+}
+
+.side-me-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.side-me-text small {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.side-search {
+	margin: 0 16px 12px;
+	height: 38px;
+	padding: 0 12px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	background: #FFFFFF;
+	border: 1px solid #E3DED7;
+	border-radius: var(--radius);
+	color: var(--muted);
+}
+
+.side-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font-size: 13px;
+}
+
+.side-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 8px 8px;
+}
+
+.side-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 8px 4px;
+}
+
+.side-head h2 {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.side-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	text-decoration: none;
+	color: var(--ink);
+}
+
+.side-item:hover {
+	background: rgba(60, 40, 20, .05);
+}
+
+.side-item.on {
+	background: #FFFFFF;
+	box-shadow: 0 1px 2px rgba(60, 40, 20, .10);
+	font-weight: 600;
+}
+
+.side-item .hash {
+	color: var(--faint);
+	font-weight: 700;
+}
+
+.side-name {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* 안 읽은 게 있으면 이름을 굵게 */
+.side-item:has(.unread:not(.hidden)) .side-name {
+	font-weight: 700;
+}
+
+.side-count {
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--muted);
+}
+
+.side-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.side-preview {
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.side-empty {
+	padding: 4px 10px 8px;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+/* + 를 누르면 펼쳐지는 새 채팅방 입력칸 */
+.side-new {
+	display: flex;
+	gap: 6px;
+	padding: 2px 8px 8px;
+	margin: 0;
+}
+
+.side-new .field {
+	flex: 1;
+	height: 34px;
+	padding: 0 10px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.side-foot {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 8px;
+	border-top: 1px solid var(--side-line);
+}
+
+.side-foot .side-item {
+	flex: 1;
+	font-size: 13px;
+	color: var(--ink-2);
+}
+
+.side-foot .spacer {
+	flex: 1;
+}
+
+.side-foot form {
+	margin: 0;
+}
+
+/* 창이 좁으면 사이드바도 좁게 */
+@media (max-width: 760px) {
+	.sidebar {
+		width: 230px;
+	}
+}
+
+/* ───────── 첫 화면 (채팅방 목록) ───────── */
+.home {
+	max-width: 680px;
+	margin: 0 auto;
+	padding: 64px 32px 40px;
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+}
+
+.home h1 {
+	font-size: 26px;
+	font-weight: 700;
+	letter-spacing: -0.5px;
+}
+
+.home-sub {
+	margin-top: 6px;
+	color: var(--muted);
+}
+
+.form-label {
+	display: block;
+	margin-bottom: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink-2);
+}
+
+.inline-form {
+	display: flex;
+	gap: 8px;
+}
+
+.inline-form .field {
+	flex: 1;
+}
+
+.section-title {
+	margin-bottom: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink-2);
+}
+
+.card-list {
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	overflow: hidden;
+}
+
+.room-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 14px 16px;
+	text-decoration: none;
+	color: var(--ink);
+}
+
+.room-row+.room-row {
+	border-top: 1px solid var(--line);
+}
+
+.room-row:hover {
+	background: #FAF8F5;
+}
+
+.room-icon {
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	border-radius: var(--radius);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+	font-weight: 700;
+}
+
+.room-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.room-text small {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+/* 접속 인원: 1명 이상이면 초록 점 */
+.room-online {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 13px;
+	color: var(--muted);
+}
+
+.room-online.on {
+	color: var(--online-ink);
+}
+
+.room-online.on::before {
+	content: '';
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--online);
+}
+
+.empty {
+	padding: 28px 16px;
+	text-align: center;
+	color: var(--muted);
+}
+
+/* 본문 머리의 화면 제목 */
+.pane-title {
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: -0.3px;
+}
+
+/* 머리 안의 아바타는 흰 배경에 맞춰 테두리 색 */
+.pane-header .presence {
+	border-color: #FFFFFF;
+}
+
+/* 사이드바 [홈] */
+.side-home {
+	margin-top: 4px;
+}
+
+.side-home svg {
+	flex-shrink: 0;
+	color: var(--muted);
+}
+
+.side-home.on svg {
+	color: var(--accent);
+}
+
+/* 입력칸 아래 작은 안내 문구 (내 정보, 로그인 쪽 화면) */
+.hint {
+	margin-top: 6px;
+	font-size: 12px;
+	color: var(--muted);
+}

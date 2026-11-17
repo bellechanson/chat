@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title th:text="${room.name} + ' - 실시간 채팅'">채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/chat.css}">
+	<meta name="_csrf" th:content="${_csrf.token}">
+	<meta name="_csrf_header" th:content="${_csrf.headerName}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+	<script th:src="@{/js/messages.js}"></script>
+	<script th:src="@{/js/files.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('room', ${room.id})}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<div class="room-title">
+					<h1><span class="hash">#</span> <span th:text="${room.name}">자유방</span></h1>
+					<span class="sub" id="memberNames"></span>
+				</div>
+				<div class="header-actions">
+					<div class="avatar-stack" id="avatarStack" aria-hidden="true"></div>
+					<button type="button" class="btn btn-sm" id="usersBtn" aria-expanded="false"
+						aria-controls="usersPop">접속자 <span id="userCount">0</span></button>
+					<form id="deleteForm" th:if="${canManage}" th:action="@{/rooms/{id}/delete(id=${room.id})}"
+						method="post">
+						<button type="submit" class="btn btn-sm btn-danger">방 삭제</button>
+					</form>
+					<div class="users-pop hidden" id="usersPop">
+						<h2>지금 이 방에 있는 사람</h2>
+						<ul id="userList"></ul>
+					</div>
+				</div>
+			</header>
+
+			<form id="dmForm" th:action="@{/dm/start}" method="post" hidden>
+				<input type="hidden" name="nickname" id="dmNickname">
+			</form>
+
+			<div id="messages" class="messages"></div>
+
+			<div th:replace="~{fragments/parts :: composer(placeholder=${'#' + room.name + '에 메시지 보내기'})}"></div>
+		</main>
+	</div>
+
+	<script th:inline="javascript">
+		const roomId = /*[[${room.id}]]*/ 0;
+		const nickname = /*[[${nickname}]]*/ '';
+		const canManage = /*[[${canManage}]]*/ false;    // 방장 또는 관리자
+		const ownerNickname = /*[[${ownerNickname}]]*/ null;
+
+		const el = id => document.getElementById(id);
+
+		let client = null;
+		let leaving = false;
+
+		// ── 메시지 목록 (이전 대화 더보기, 날짜 구분선, 스크롤 → messages.js) ──
+		const list = createMessageList({
+			box: el('messages'),
+			fetchPage: async (before) => {
+				const res = await fetch(before
+					? `/api/rooms/${roomId}/messages?before=${before}`
+					: `/api/rooms/${roomId}/messages`);
+				return res.ok ? res.json() : null;
+			},
+			build: buildMessage,
+			divider: () => buildMessage({type: 'ENTER', content: '여기까지 이전 대화'})
+		});
+
+		// 접속자 목록용 아바타 (나는 주황, 다른 사람은 이름별 색)
+		function avatarEl(name, extraClass) {
+			const span = document.createElement('span');
+			span.className = 'avatar ' + (name === nickname ? 'avatar-accent' : 'av-' + tintOf(name))
+				+ (extraClass ? ' ' + extraClass : '');
+			span.textContent = initialOf(name);
+			return span;
+		}
+
+		// ── 실시간 메시지 처리 ──
+
+		// 방에 있는 동안 받은 메시지는 바로 읽음 (사이드바 뱃지가 남지 않게)
+		function markRoomRead() {
+			if (client && client.connected) {
+				client.publish({destination: `/app/chat/${roomId}/read`});
+			}
+		}
+
+		function handleMessage(msg) {
+			if (msg.type === 'KICK' && msg.sender === nickname) {
+				return forceLeave('방장에 의해 강퇴되었습니다.', '/rooms?kicked');
+			}
+			if (msg.type === 'ROOM_DELETED') {
+				return forceLeave('채팅방이 삭제되었습니다.', '/rooms?deleted');
+			}
+			if (msg.type === 'MESSAGE_DELETED') {
+				const target = list.find(msg.id);
+				if (target) markDeleted(target);
+				return;
+			}
+
+			// 메시지를 보냈거나 나갔으면 그 사람의 "입력 중" 끝
+			if (msg.sender && typers.has(msg.sender)) removeTyper(msg.sender);
+
+			list.append(buildMessage(msg), msg.sender === nickname, msg.date);
+
+			if (msg.id) markRoomRead();   // 저장된 메시지(글·사진·파일)면 읽음 처리
+		}
+
+		async function forceLeave(text, url) {
+			if (leaving) return;
+			leaving = true;
+			await leave();
+			alert(text);
+			location.href = url;
+		}
+
+		// 메시지 하나: 입장·퇴장·강퇴는 가운데 안내, 나머지는 한 줄 (messages.js의 messageLine)
+		function buildMessage(msg) {
+			if (msg.type === 'ENTER' || msg.type === 'LEAVE' || msg.type === 'KICK') {
+				const p = document.createElement('p');
+				p.className = 'notice' + (msg.type === 'KICK' ? ' kick' : '');
+				p.textContent = msg.content;
+				return p;
+			}
+
+			const mine = msg.sender === nickname;
+			return messageLine({
+				id: msg.id,
+				name: msg.sender,
+				mine,
+				time: msg.time,
+				content: msg.content,
+				file: msg.file,
+				deleted: msg.deleted,
+				// 내 메시지, 또는 방장·관리자는 지울 수 있음
+				onDelete: msg.id && (mine || canManage) ? () => deleteMessage(msg.id) : null,
+				onImageLoad: list.keepBottom
+			});
+		}
+
+		function deleteMessage(id) {
+			if (!confirm('메시지를 삭제할까요?\n모든 사람의 화면에서 "삭제된 메시지입니다"로 바뀝니다.')) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/delete`,
+				body: JSON.stringify({id})
+			});
+		}
+
+		// ── 입력 중 표시 ──
+		const TYPING_SHOW_MS = 4000;   // 신호가 이 시간 동안 안 오면 그 사람은 목록에서 뺌
+		const typers = new Map();      // 입력 중인 사람: 닉네임 → 숨김 타이머
+
+		// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
+		const typing = watchTyping(el('content'), (on) => {
+			if (!client || !client.connected) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/typing`,
+				body: JSON.stringify({typing: on})
+			});
+		});
+
+		function onTyping(e) {
+			if (e.nickname === nickname) return;   // 내 신호는 무시
+			if (!e.typing) return removeTyper(e.nickname);
+
+			clearTimeout(typers.get(e.nickname));
+			typers.set(e.nickname, setTimeout(() => removeTyper(e.nickname), TYPING_SHOW_MS));
+			renderTyping();
+		}
+
+		function removeTyper(name) {
+			clearTimeout(typers.get(name));
+			typers.delete(name);
+			renderTyping();
+		}
+
+		// 1명: 철수님이 / 2명: 철수, 영희님이 / 3명 이상: 철수 외 2명이
+		function renderTyping() {
+			const names = [...typers.keys()];
+			if (names.length === 0) {
+				el('typing').classList.remove('on');
+				return;
+			}
+			el('typingText').textContent =
+				names.length === 1 ? `${names[0]}님이 입력 중`
+					: names.length === 2 ? `${names[0]}, ${names[1]}님이 입력 중`
+						: `${names[0]} 외 ${names.length - 1}명이 입력 중`;
+			el('typing').classList.add('on');
+		}
+
+		// ── 접속자: 머리의 이름·아바타 + [접속자] 펼침 목록 ──
+		function renderUsers(users) {
+			// 방에서 나간 사람은 "입력 중"에서도 뺌
+			[...typers.keys()].filter(name => !users.includes(name)).forEach(removeTyper);
+
+			const sorted = [...users].sort((a, b) => (b === nickname) - (a === nickname));
+			el('userCount').textContent = users.length;
+			el('memberNames').textContent = sorted.join(', ');
+
+			const stack = el('avatarStack');
+			stack.innerHTML = '';
+			sorted.slice(0, 3).forEach(name => stack.appendChild(avatarEl(name)));
+
+			const ul = el('userList');
+			ul.innerHTML = '';
+			sorted.forEach(name => {
+				const li = document.createElement('li');
+				li.className = 'user-row' + (name === nickname ? ' me' : '');
+				li.appendChild(avatarEl(name, 'avatar-sm'));
+
+				const label = document.createElement('span');
+				label.className = 'name';
+				label.textContent = name + (name === nickname ? ' (나)' : '');
+				li.appendChild(label);
+
+				if (name === ownerNickname) {
+					const tag = document.createElement('span');
+					tag.className = 'tag';
+					tag.textContent = '방장';
+					li.appendChild(tag);
+				}
+				if (name !== nickname) {
+					const dmBtn = document.createElement('button');
+					dmBtn.type = 'button';
+					dmBtn.className = 'mini-btn';
+					dmBtn.textContent = '1:1';
+					dmBtn.onclick = () => startDm(name);
+					li.appendChild(dmBtn);
+				}
+				if (canManage && name !== nickname) {
+					const kickBtn = document.createElement('button');
+					kickBtn.type = 'button';
+					kickBtn.className = 'mini-btn danger';
+					kickBtn.textContent = '강퇴';
+					kickBtn.onclick = () => kick(name);
+					li.appendChild(kickBtn);
+				}
+				ul.appendChild(li);
+			});
+		}
+
+		// [접속자] 펼치기/닫기 (바깥 클릭, Esc로 닫기)
+		function setUsersOpen(open) {
+			el('usersPop').classList.toggle('hidden', !open);
+			el('usersBtn').setAttribute('aria-expanded', open);
+		}
+		el('usersBtn').addEventListener('click', (e) => {
+			e.stopPropagation();
+			setUsersOpen(el('usersPop').classList.contains('hidden'));
+		});
+		document.addEventListener('click', (e) => {
+			if (!el('usersPop').contains(e.target)) setUsersOpen(false);
+		});
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') setUsersOpen(false);
+		});
+
+		function kick(name) {
+			if (!confirm(`${name}님을 강퇴할까요?\n강퇴되면 이 방에 다시 들어올 수 없습니다.`)) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/kick`,
+				body: JSON.stringify({target: name})
+			});
+		}
+
+		async function startDm(name) {
+			leaving = true;
+			await leave();
+			el('dmNickname').value = name;
+			el('dmForm').submit();
+		}
+
+		// ── 전송 / 나가기 ──
+		function sendMessage() {
+			const input = el('content');
+			const content = input.value.trim();
+			if (!content || !client || !client.connected) return;
+
+			client.publish({
+				destination: `/app/chat/${roomId}/send`,
+				body: JSON.stringify({content})
+			});
+			input.value = '';
+			input.focus();
+			typing.sent();
+		}
+
+		async function leave() {
+			if (client && client.active) {
+				await client.deactivate();
+			}
+		}
+
+		el('sendBtn').onclick = sendMessage;
+		el('content').addEventListener('keydown', e => {
+			if (e.key === 'Enter' && !e.isComposing) sendMessage();
+		});
+
+		// [첨부] 버튼, 붙여넣기 (files.js)
+		setupAttach({
+			button: el('attachBtn'),
+			input: el('fileInput'),
+			textInput: el('content'),
+			uploadUrl: `/api/rooms/${roomId}/files`
+		});
+
+		const deleteForm = el('deleteForm');
+		if (deleteForm) {
+			deleteForm.addEventListener('submit', (e) => {
+				if (!confirm('방을 삭제할까요?\n모든 대화 내용이 함께 삭제되며 되돌릴 수 없습니다.')) {
+					e.preventDefault();
+					return;
+				}
+				leaving = true;
+			});
+		}
+
+		// ── 실시간 연결 (이 방은 뱃지 셈에서 제외) ──
+		client = connectSocket(async (c) => {
+			await list.loadFirst();
+			c.subscribe(`/topic/room/${roomId}`, f => handleMessage(JSON.parse(f.body)));
+			c.subscribe(`/topic/room/${roomId}/users`, f => renderUsers(JSON.parse(f.body)));
+			c.subscribe(`/topic/room/${roomId}/typing`, f => onTyping(JSON.parse(f.body)));
+			c.publish({destination: `/app/chat/${roomId}/enter`});
+			el('content').focus();
+		}, roomId);
+	</script>
+</body>
+
+</html>

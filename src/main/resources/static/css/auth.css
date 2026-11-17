@@ -1,0 +1,178 @@
+/* ═════════ 로그인 · 회원가입 · 아이디/비밀번호 찾기 · 오류 (base.css 다음에 불러옴) ═════════ */
+
+body.auth-page {
+	min-height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px 16px;
+	background: var(--side);
+}
+
+.auth-card {
+	width: 100%;
+	max-width: 420px;
+	padding: 36px 32px 28px;
+	background: #FFFFFF;
+	border: 1px solid var(--side-line);
+	border-radius: 16px;
+	box-shadow: 0 8px 30px rgba(60, 40, 20, .06);
+}
+
+/* 로고 + 서비스 이름 */
+.brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 28px;
+	color: var(--ink);
+	font-weight: 700;
+	text-decoration: none;
+}
+
+.brand-mark {
+	width: 34px;
+	height: 34px;
+	border-radius: 10px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--accent);
+	color: #FFFFFF;
+}
+
+.auth-card h1 {
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: -0.4px;
+}
+
+.auth-sub {
+	margin-top: 6px;
+	color: var(--muted);
+}
+
+/* 입력 묶음 */
+.auth-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	margin: 24px 0 0;
+}
+
+.auth-form .field {
+	width: 100%;
+}
+
+.field-row {
+	display: flex;
+	gap: 8px;
+}
+
+.field-row .field {
+	flex: 1;
+}
+
+.field-row .btn {
+	height: 44px;
+	flex-shrink: 0;
+}
+
+
+/* api.js의 setHint가 붙이는 결과 색 */
+.auth-form .hint.ok {
+	color: var(--online-ink);
+}
+
+.auth-form .hint.err {
+	color: var(--danger);
+}
+
+.btn-block {
+	width: 100%;
+	height: 44px;
+}
+
+/* 로그인 상태 유지 */
+.check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	color: var(--ink-2);
+	cursor: pointer;
+	user-select: none;
+}
+
+.check input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+/* 아래 링크 */
+.auth-links {
+	margin-top: 24px;
+	padding-top: 20px;
+	border-top: 1px solid var(--line);
+	display: flex;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 4px 16px;
+	font-size: 13px;
+	color: var(--muted);
+}
+
+.auth-links a {
+	color: var(--accent-ink);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.auth-links a:hover {
+	text-decoration: underline;
+}
+
+/* 아이디 찾기 결과 */
+.result-box {
+	margin-top: 24px;
+	padding: 24px 16px;
+	border-radius: 12px;
+	background: var(--accent-soft);
+	text-align: center;
+	color: var(--ink-2);
+}
+
+.result-box strong {
+	display: block;
+	margin: 6px 0 2px;
+	font-size: 22px;
+	color: var(--ink);
+	letter-spacing: 0.5px;
+}
+
+/* 오류 화면 */
+.error-code {
+	font-size: 64px;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: -2px;
+	color: var(--accent);
+}
+
+.error-card h1 {
+	margin-top: 16px;
+}
+
+.error-actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 28px;
+}
+
+.error-actions .btn {
+	flex: 1;
+	height: 44px;
+}

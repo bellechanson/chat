@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('home', null)}"></nav>
+
+		<main class="pane">
+			<div class="pane-body">
+				<div class="home">
+					<div class="alert alert-error" th:if="${param.kicked}">방장에 의해 강퇴되었습니다.</div>
+					<div class="alert alert-error" th:if="${param.banned}">강퇴된 방에는 다시 들어갈 수 없습니다.</div>
+					<div class="alert alert-info" th:if="${param.deleted}">채팅방이 삭제되었습니다.</div>
+
+					<div>
+						<h1 th:text="'안녕하세요, ' + ${nickname} + '님'">안녕하세요, 관리자님</h1>
+						<p class="home-sub">왼쪽에서 대화를 고르거나 새 채팅방을 만드세요.</p>
+					</div>
+
+					<form th:action="@{/rooms}" method="post">
+						<label for="newRoom" class="form-label">새 채팅방</label>
+						<div class="inline-form">
+							<input id="newRoom" name="name" class="field" placeholder="채팅방 이름 (30자까지)" maxlength="30"
+								required>
+							<button type="submit" class="btn btn-primary" style="height: 44px">만들기</button>
+						</div>
+					</form>
+
+					<section>
+						<h2 class="section-title">모든 채팅방</h2>
+						<div class="card-list" id="roomList">
+							<a th:each="room : ${rooms}" th:href="@{/rooms/{id}(id=${room.id})}" class="room-row"
+								th:attr="data-room-id=${room.id}">
+								<span class="room-icon">#</span>
+								<span class="room-text">
+									<strong th:text="${room.name}">자유방</strong>
+									<small th:text="${#temporals.format(room.createdAt, 'M월 d일')} + ' 만듦'">11월 16일
+										만듦</small>
+								</span>
+								<span class="room-online js-room-count" data-suffix="명 접속"
+									th:attr="data-room-id=${room.id}"
+									th:classappend="${(counts[room.id] ?: 0) > 0} ? 'on'"
+									th:text="${counts[room.id] ?: 0} + '명 접속'">0명 접속</span>
+							</a>
+						</div>
+						<p class="empty" id="emptyMsg" th:style="${#lists.isEmpty(rooms)} ? '' : 'display:none'">
+							아직 채팅방이 없어요. 위에서 첫 방을 만들어 보세요.</p>
+					</section>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<script>
+		const roomList = document.getElementById('roomList');
+		const emptyMsg = document.getElementById('emptyMsg');
+
+		function toggleEmpty() {
+			emptyMsg.style.display = roomList.children.length === 0 ? '' : 'none';
+		}
+
+		// 새 방 → 목록 맨 위에 추가 (서버가 그리는 줄과 같은 모양)
+		function addRoomRow(room) {
+			if (roomList.querySelector(`[data-room-id="${room.id}"]`)) return;
+			const a = document.createElement('a');
+			a.className = 'room-row';
+			a.href = `/rooms/${room.id}`;
+			a.dataset.roomId = room.id;
+			a.innerHTML = `
+				<span class="room-icon">#</span>
+				<span class="room-text"><strong></strong><small>방금 만듦</small></span>
+				<span class="room-online js-room-count" data-suffix="명 접속" data-room-id="${room.id}">0명 접속</span>`;
+			a.querySelector('strong').textContent = room.name;
+			roomList.prepend(a);
+			toggleEmpty();
+		}
+
+		function removeRoomRow(roomId) {
+			roomList.querySelector(`[data-room-id="${roomId}"]`)?.remove();
+			toggleEmpty();
+		}
+
+		// 실시간 연결 (사이드바 갱신은 sidebar.js가 알아서)
+		connectSocket(client => {
+			client.subscribe('/topic/rooms/created', f => addRoomRow(JSON.parse(f.body)));
+			client.subscribe('/topic/rooms/deleted', f => removeRoomRow(JSON.parse(f.body)));
+		});
+	</script>
+</body>
+
+</html>

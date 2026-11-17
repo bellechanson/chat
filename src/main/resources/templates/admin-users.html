@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>회원 관리 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/settings.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('admin', null)}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<div class="admin-head">
+					<h1 class="pane-title">관리자</h1>
+					<nav class="tabs" aria-label="관리 메뉴">
+						<a th:href="@{/admin}">채팅방 · 강퇴</a>
+						<a th:href="@{/admin/users}" class="on" aria-current="page">회원</a>
+					</nav>
+				</div>
+			</header>
+
+			<div class="pane-body">
+				<div class="admin">
+					<div class="alert alert-info" th:if="${message}" th:text="${message}"></div>
+					<div class="alert alert-error" th:if="${error}" th:text="${error}"></div>
+
+					<section>
+						<form class="search-form" th:action="@{/admin/users}" method="get" role="search">
+							<label for="q" class="sr-only">회원 찾기</label>
+							<input class="field" id="q" name="q" th:value="${q}" placeholder="아이디, 닉네임, 이메일로 찾기">
+							<button type="submit" class="btn">찾기</button>
+							<a th:if="${q}" th:href="@{/admin/users}" class="btn">전체 보기</a>
+						</form>
+					</section>
+
+					<section>
+						<h2 class="section-title">회원<span class="count" th:text="${#lists.size(users)}">0</span></h2>
+						<div class="table-wrap" th:unless="${#lists.isEmpty(users)}">
+							<table class="table">
+								<thead>
+									<tr>
+										<th>회원</th>
+										<th>이메일</th>
+										<th>권한</th>
+										<th>상태</th>
+										<th>가입일</th>
+										<th class="num"><span class="sr-only">관리</span></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr th:each="u : ${users}" th:classappend="${u.me} ? 'me'"
+										th:attr="data-user-id=${u.id}">
+										<td>
+											<div class="user-cell">
+												<span class="avatar avatar-sm js-avatar"
+													th:classappend="${u.me} ? 'avatar-accent'"
+													th:attr="data-name=${u.nickname}"><span class="presence"
+														th:classappend="${u.online} ? 'on'"></span></span>
+												<div>
+													<strong
+														th:text="${u.nickname} + (${u.me} ? ' (나)' : '')">철수</strong>
+													<small>
+														<span th:text="${u.username}">chulsoo</span>
+														<span class="login-state"
+															th:text="${u.online} ? ' · 로그인 중' : ''"></span>
+													</small>
+												</div>
+											</div>
+										</td>
+										<td class="muted" th:text="${u.email}">a@b.com</td>
+										<td>
+											<span class="pill pill-admin" th:if="${u.admin}">관리자</span>
+											<span class="pill pill-user" th:unless="${u.admin}">회원</span>
+										</td>
+										<td>
+											<span class="pill pill-stop" th:if="${u.suspended}">정지</span>
+											<span class="pill pill-ok" th:unless="${u.suspended}">정상</span>
+										</td>
+										<td class="muted" th:text="${u.createdAt}">2026-11-13</td>
+										<td>
+											<div class="actions" th:unless="${u.me}">
+												<!-- 강제 로그아웃 (로그인 중일 때만) -->
+												<form class="logout-form" th:classappend="${u.online} ? '' : 'hidden'"
+													th:action="@{/admin/users/{id}/logout(id=${u.id})}" method="post">
+													<input type="hidden" name="q" th:value="${q}">
+													<button type="submit" class="btn btn-sm">강제 로그아웃</button>
+												</form>
+
+												<!-- 관리자 지정 / 해제 -->
+												<form th:action="@{/admin/users/{id}/role(id=${u.id})}" method="post"
+													th:attr="onsubmit=|return confirm('${u.nickname}님의 권한을 변경할까요?\n변경 즉시 로그아웃됩니다.');|">
+													<input type="hidden" name="q" th:value="${q}">
+													<input type="hidden" name="role"
+														th:value="${u.admin} ? 'USER' : 'ADMIN'">
+													<button type="submit" class="btn btn-sm"
+														th:text="${u.admin} ? '관리자 해제' : '관리자 지정'">관리자 지정</button>
+												</form>
+
+												<!-- 정지 / 해제 (관리자는 정지 버튼 없음) -->
+												<form th:if="${u.suspended}"
+													th:action="@{/admin/users/{id}/unsuspend(id=${u.id})}"
+													method="post">
+													<input type="hidden" name="q" th:value="${q}">
+													<button type="submit" class="btn btn-sm">정지 해제</button>
+												</form>
+												<form th:if="${!u.suspended and !u.admin}"
+													th:action="@{/admin/users/{id}/suspend(id=${u.id})}" method="post"
+													th:attr="onsubmit=|return confirm('${u.nickname}님을 정지할까요?\n즉시 로그아웃되고 다시 로그인할 수 없습니다.');|">
+													<input type="hidden" name="q" th:value="${q}">
+													<button type="submit" class="btn btn-sm btn-danger">정지</button>
+												</form>
+											</div>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<div class="table-wrap empty" th:if="${#lists.isEmpty(users)}">찾는 회원이 없어요.</div>
+					</section>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<script>
+		// 아바타 색·첫 글자 (sidebar.js의 tintOf, initialOf → 사이드바와 같은 색)
+		document.querySelectorAll('.js-avatar').forEach(av => {
+			if (!av.classList.contains('avatar-accent')) av.classList.add('av-' + tintOf(av.dataset.name));
+			av.prepend(initialOf(av.dataset.name));
+		});
+
+		// 로그인 중인 회원 id 목록을 받아서 표시 갱신
+		function applyOnline(ids) {
+			const online = new Set(ids.map(String));   // data-user-id는 문자열이라 맞춰 줌
+			document.querySelectorAll('tr[data-user-id]').forEach(tr => {
+				const on = online.has(tr.dataset.userId);
+				tr.querySelector('.presence')?.classList.toggle('on', on);
+				const state = tr.querySelector('.login-state');
+				if (state) state.textContent = on ? ' · 로그인 중' : '';
+				tr.querySelector('.logout-form')?.classList.toggle('hidden', !on);
+			});
+		}
+
+		connectSocket(client => {
+			client.subscribe('/topic/admin/online', f => applyOnline(JSON.parse(f.body)));
+		});
+	</script>
+</body>
+
+</html>

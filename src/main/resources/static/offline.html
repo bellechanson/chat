@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>연결할 수 없음 - 실시간 채팅</title>
+	<!-- 서버가 꺼져 있을 때 뜨는 화면이라 base.css를 못 불러옴 → 필요한 스타일을 여기에 직접 -->
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			min-height: 100vh;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 40px 16px;
+			background: #F7F5F2;
+			color: #1F1B17;
+			font-family: 'IBM Plex Sans KR', 'Malgun Gothic', sans-serif;
+			font-size: 14px;
+			line-height: 1.5;
+		}
+
+		.card {
+			width: 100%;
+			max-width: 380px;
+			padding: 36px 32px 28px;
+			background: #FFFFFF;
+			border: 1px solid #E8E3DD;
+			border-radius: 16px;
+			box-shadow: 0 8px 30px rgba(60, 40, 20, .06);
+			text-align: center;
+		}
+
+		img {
+			width: 56px;
+			height: 56px;
+			border-radius: 14px;
+		}
+
+		h1 {
+			margin: 16px 0 6px;
+			font-size: 20px;
+			font-weight: 700;
+			letter-spacing: -0.3px;
+		}
+
+		p {
+			margin: 0;
+			color: #5F5850;
+		}
+
+		/* 자동 확인 상태 */
+		.status {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			margin-top: 20px;
+			font-size: 13px;
+			color: #5F5850;
+		}
+
+		.dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: #D9480F;
+			animation: pulse 1.6s infinite;
+		}
+
+		@keyframes pulse {
+
+			0%,
+			100% {
+				opacity: .25;
+			}
+
+			50% {
+				opacity: 1;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			.dot {
+				animation: none;
+			}
+		}
+
+		button {
+			width: 100%;
+			height: 44px;
+			margin-top: 20px;
+			border: 0;
+			border-radius: 8px;
+			background: #D9480F;
+			color: #FFFFFF;
+			font: inherit;
+			font-weight: 600;
+			cursor: pointer;
+		}
+
+		button:hover {
+			background: #C2410C;
+		}
+
+		button:focus-visible {
+			outline: 2px solid #D9480F;
+			outline-offset: 2px;
+		}
+	</style>
+</head>
+
+<body>
+	<main class="card">
+		<img src="/icons/icon-192.png" alt="">
+		<h1>서버에 연결할 수 없습니다</h1>
+		<p>채팅 서버가 꺼져 있거나 인터넷 연결이 끊긴 것 같아요.</p>
+
+		<div class="status" role="status" aria-live="polite">
+			<span class="dot" aria-hidden="true"></span>
+			<span id="statusText">다시 연결되면 자동으로 돌아가요</span>
+		</div>
+
+		<button type="button" id="retryBtn">지금 다시 시도</button>
+	</main>
+
+	<script>
+		// 이 화면은 원래 주소(/rooms/51 등)에 그대로 떠 있음 → 새로고침하면 원래 화면으로 돌아감
+		const RETRY_MS = 5000;
+		let checking = false;
+
+		// 서버가 응답하는지 가볍게 확인 (캐시 안 씀)
+		async function serverUp() {
+			try {
+				const res = await fetch('/manifest.json', {cache: 'no-store'});
+				return res.ok;
+			} catch (e) {
+				return false;
+			}
+		}
+
+		async function check() {
+			if (checking) return;
+			checking = true;
+			if (await serverUp()) {
+				document.getElementById('statusText').textContent = '연결됐어요. 돌아가는 중...';
+				location.reload();
+				return;
+			}
+			checking = false;
+		}
+
+		document.getElementById('retryBtn').onclick = check;
+		setInterval(check, RETRY_MS);
+		window.addEventListener('online', check);   // 인터넷이 다시 연결되면 바로 확인
+	</script>
+</body>
+
+</html>

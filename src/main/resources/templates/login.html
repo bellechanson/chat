@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>로그인 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/auth.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+</head>
+
+<body class="auth-page">
+	<main class="auth-card">
+		<a th:replace="~{fragments/parts :: brand}"></a>
+		실시간 채팅
+		</div>
+
+		<h1>로그인</h1>
+		<p class="auth-sub">아이디와 비밀번호를 입력해 주세요.</p>
+
+		<form class="auth-form" th:action="@{/login}" method="post">
+			<div class="alert alert-error" th:if="${param.error}">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+			<div class="alert alert-error" th:if="${param.locked}">정지된 계정입니다. 관리자에게 문의하세요.</div>
+			<div class="alert alert-info" th:if="${param.expired}">계정 정보가 변경되어 로그아웃되었습니다. 다시 로그인해 주세요.</div>
+			<div class="alert alert-info" th:if="${param.logout}">로그아웃되었습니다.</div>
+			<div class="alert alert-info" th:if="${param.signup}">회원가입이 완료되었습니다. 로그인해 주세요.</div>
+			<div class="alert alert-info" th:if="${param.reset}">비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.</div>
+
+			<div>
+				<label for="username" class="form-label">아이디</label>
+				<input class="field" id="username" name="username" required autofocus autocomplete="username">
+			</div>
+			<div>
+				<label for="password" class="form-label">비밀번호</label>
+				<input class="field" id="password" name="password" type="password" required
+					autocomplete="current-password">
+			</div>
+			<label class="check">
+				<input type="checkbox" name="remember-me"> 로그인 상태 유지
+			</label>
+			<button type="submit" class="btn btn-primary btn-block">로그인</button>
+		</form>
+
+		<nav class="auth-links" aria-label="계정 도움">
+			<a th:href="@{/find-id}">아이디 찾기</a>
+			<a th:href="@{/reset-password}">비밀번호 재설정</a>
+			<a th:href="@{/signup}">회원가입</a>
+		</nav>
+	</main>
+
+	<script>
+		if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => { });
+	</script>
+</body>
+
+</html>

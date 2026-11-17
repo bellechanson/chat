@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>아이디 찾기 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/auth.css}">
+	<meta name="_csrf" th:content="${_csrf.token}">
+	<meta name="_csrf_header" th:content="${_csrf.headerName}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script th:src="@{/js/api.js}"></script>
+</head>
+
+<body class="auth-page">
+	<main class="auth-card">
+		<a th:replace="~{fragments/parts :: brand}"></a>
+		실시간 채팅
+		</a>
+
+		<h1>아이디 찾기</h1>
+		<p class="auth-sub">가입한 이메일로 인증하면 아이디를 알려 드려요.</p>
+
+		<div class="auth-form" id="inputSection">
+			<div>
+				<label for="email" class="form-label">가입한 이메일</label>
+				<div class="field-row">
+					<input class="field" id="email" type="email" maxlength="100" autofocus autocomplete="email">
+					<button type="button" class="btn" id="sendBtn">인증번호 받기</button>
+				</div>
+				<div class="field-row hidden" id="codeRow" style="margin-top: 8px">
+					<label for="code" class="sr-only">인증번호</label>
+					<input class="field" id="code" placeholder="인증번호 6자리" maxlength="6" inputmode="numeric"
+						autocomplete="one-time-code">
+					<button type="button" class="btn" id="verifyBtn">확인</button>
+				</div>
+				<p class="hint" id="emailHint"></p>
+			</div>
+		</div>
+
+		<div class="result-box hidden" id="result">
+			회원님의 아이디는
+			<strong id="maskedId"></strong>
+			입니다.
+		</div>
+
+		<nav class="auth-links">
+			<a th:href="@{/login}">로그인</a>
+			<a th:href="@{/reset-password}">비밀번호 재설정</a>
+		</nav>
+	</main>
+
+	<script>
+		const el = id => document.getElementById(id);
+		let timer = null;
+
+		el('sendBtn').onclick = async () => {
+			const email = el('email').value.trim();
+			if (!email) return setHint(el('emailHint'), '이메일을 입력하세요.', false);
+
+			el('sendBtn').disabled = true;
+			const r = await postJson('/api/email/send', {email, purpose: 'FIND_ID'});
+			setHint(el('emailHint'), r.message, r.ok);
+			if (r.ok) {
+				el('codeRow').classList.remove('hidden');
+				el('code').focus();
+				timer = cooldown(el('sendBtn'), 60, '인증번호 받기');
+			} else {
+				el('sendBtn').disabled = false;
+			}
+		};
+
+		async function verify() {
+			const r = await postJson('/api/email/verify', {
+				email: el('email').value.trim(), purpose: 'FIND_ID', code: el('code').value.trim()
+			});
+			if (!r.ok) return setHint(el('emailHint'), r.message, false);
+
+			if (timer) clearInterval(timer);
+			el('inputSection').classList.add('hidden');
+			el('maskedId').textContent = r.data;
+			el('result').classList.remove('hidden');
+		}
+
+		el('verifyBtn').onclick = verify;
+		el('code').addEventListener('keydown', e => {if (e.key === 'Enter') verify();});
+	</script>
+</body>
+
+</html>

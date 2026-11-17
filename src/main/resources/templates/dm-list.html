@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>새 1:1 대화 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/chat.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('dm', null)}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<h1 class="pane-title">새 1:1 대화</h1>
+			</header>
+
+			<div class="pane-body">
+				<div class="picker">
+					<div class="alert alert-error" th:if="${error}" th:text="${error}">오류</div>
+
+					<div class="side-search">
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+							stroke-width="2" stroke-linecap="round" aria-hidden="true">
+							<circle cx="11" cy="11" r="7"></circle>
+							<path d="M20 20l-3.5-3.5"></path>
+						</svg>
+						<label for="userSearch" class="sr-only">닉네임으로 찾기</label>
+						<input id="userSearch" placeholder="닉네임으로 찾기" autocomplete="off" autofocus>
+					</div>
+
+					<ul class="card-list" id="userList" th:unless="${#lists.isEmpty(users)}">
+						<li th:each="u : ${users}" th:attr="data-name=${u.nickname},data-user-id=${u.id}">
+							<form th:action="@{/dm/start/{id}(id=${u.id})}" method="post" class="pick-form">
+								<button type="submit" class="pick-row">
+									<span class="avatar" th:classappend="'av-' + ${u.tint}"><span
+											th:text="${u.initial}">영</span><span class="presence"
+											th:classappend="${u.online} ? 'on'"></span></span>
+									<span class="pick-name" th:text="${u.nickname}">영희</span>
+									<span class="pick-status" th:classappend="${u.online} ? 'on'"
+										th:text="${u.online} ? '접속 중' : '오프라인'">접속 중</span>
+									<span class="pick-go">대화하기</span>
+								</button>
+							</form>
+						</li>
+					</ul>
+
+					<p class="empty" th:if="${#lists.isEmpty(users)}">대화할 수 있는 다른 사용자가 없어요.</p>
+					<p class="empty hidden" id="userEmpty">찾는 사용자가 없어요.</p>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<script>
+		// 닉네임 찾기 (화면에서 바로 거르기)
+		document.getElementById('userSearch').addEventListener('input', (e) => {
+			const q = e.target.value.trim().toLowerCase();
+			const rows = document.querySelectorAll('#userList li');
+			let shown = 0;
+			rows.forEach(li => {
+				const match = li.dataset.name.toLowerCase().includes(q);
+				li.classList.toggle('hidden', !match);
+				if (match) shown++;
+			});
+			document.getElementById('userEmpty').classList.toggle('hidden', shown > 0 || rows.length === 0);
+		});
+
+		// 접속 상태 실시간 갱신
+		function applyOnline(ids) {
+			const online = new Set(ids.map(String));
+			document.querySelectorAll('#userList li[data-user-id]').forEach(li => {
+				const on = online.has(li.dataset.userId);
+				li.querySelector('.presence').classList.toggle('on', on);
+				const status = li.querySelector('.pick-status');
+				status.classList.toggle('on', on);
+				status.textContent = on ? '접속 중' : '오프라인';
+			});
+		}
+
+		connectSocket(client => {
+			client.subscribe('/topic/online', f => applyOnline(JSON.parse(f.body)));
+		});
+	</script>
+</body>
+
+</html>

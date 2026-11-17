@@ -1,0 +1,99 @@
+package com.green.chat.controller;
+
+import java.security.Principal;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.messaging.handler.annotation.DestinationVariable;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
+import org.springframework.stereotype.Controller;
+
+import com.green.chat.dto.DeleteRequest;
+import com.green.chat.dto.DmDeletedEvent;
+import com.green.chat.dto.DmReadEvent;
+import com.green.chat.dto.DmTypingEvent;
+import com.green.chat.dto.SendRequest;
+import com.green.chat.dto.TypingRequest;
+import com.green.chat.security.LoginUser;
+import com.green.chat.service.DmNotifier;
+import com.green.chat.service.DmService;
+
+@Controller
+public class DmSocketController {
+
+	private static final Logger log = LoggerFactory.getLogger(DmSocketController.class);
+
+	private final DmService dmService;
+	private final DmNotifier dmNotifier;
+	private final SimpMessageSendingOperations messagingTemplate;
+
+	public DmSocketController(DmService dmService, DmNotifier dmNotifier,
+			SimpMessageSendingOperations messagingTemplate) {
+		this.dmService = dmService;
+		this.dmNotifier = dmNotifier;
+		this.messagingTemplate = messagingTemplate;
+	}
+
+	// /app/dm/{id}/send
+	@MessageMapping("/dm/{conversationId}/send")
+	public void send(@DestinationVariable Long conversationId, @Payload SendRequest request, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null)
+			return;
+
+		try {
+			DmService.Sent sent = dmService.send(conversationId, user.getId(), user.getNickname(), request.content());
+			dmNotifier.messageSent(principal.getName(), user.getNickname(), sent);
+		} catch (IllegalArgumentException e) {
+			log.warn("[DM 전송 실패] conv={}, user={}, reason={}", conversationId, user.getId(), e.getMessage());
+		}
+	}
+
+	// /app/dm/{id}/read : 대화 화면을 보고 있다는 신호
+	@MessageMapping("/dm/{conversationId}/read")
+	public void read(@DestinationVariable Long conversationId, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null)
+			return;
+
+		dmService.markRead(conversationId, user.getId()).ifPresent(partnerUsername -> {
+			DmReadEvent event = new DmReadEvent(conversationId, user.getId());
+			messagingTemplate.convertAndSendToUser(partnerUsername, "/queue/dm-read", event); // 상대: "1" 지우기
+			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-read", event); // 나: 목록 뱃지 지우기
+		});
+	}
+
+	// /app/dm/{id}/typing : 입력 중 신호를 상대에게만 전달 (참여자만)
+	@MessageMapping("/dm/{conversationId}/typing")
+	public void typing(@DestinationVariable Long conversationId, @Payload TypingRequest request, Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null)
+			return;
+
+		dmService.partnerUsername(conversationId, user.getId())
+				.ifPresent(partner -> messagingTemplate.convertAndSendToUser(partner, "/queue/dm-typing",
+						new DmTypingEvent(conversationId, user.getNickname(), request.typing())));
+	}
+
+	// /app/dm/{id}/delete : 내 메시지 삭제 → 나(다른 탭 포함)와 상대 화면에 반영
+	@MessageMapping("/dm/{conversationId}/delete")
+	public void deleteMessage(@DestinationVariable Long conversationId, @Payload DeleteRequest request,
+			Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null)
+			return;
+
+		try {
+			String partner = dmService.delete(conversationId, request.id(), user.getId());
+			DmDeletedEvent event = new DmDeletedEvent(conversationId, request.id());
+			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-deleted", event);
+			if (partner != null) {
+				messagingTemplate.convertAndSendToUser(partner, "/queue/dm-deleted", event);
+			}
+		} catch (IllegalArgumentException e) {
+			log.warn("[DM 삭제 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
+		}
+	}
+}

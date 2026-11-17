@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>회원가입 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/auth.css}">
+	<meta name="_csrf" th:content="${_csrf.token}">
+	<meta name="_csrf_header" th:content="${_csrf.headerName}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script th:src="@{/js/api.js}"></script>
+</head>
+
+<body class="auth-page">
+	<main class="auth-card">
+		<a th:replace="~{fragments/parts :: brand}"></a>
+		실시간 채팅
+		</a>
+
+		<h1>회원가입</h1>
+		<p class="auth-sub">이메일 인증을 마치면 바로 대화를 시작할 수 있어요.</p>
+
+		<form class="auth-form" th:action="@{/signup}" method="post">
+			<div class="alert alert-error" th:if="${error}" th:text="${error}">에러</div>
+
+			<div>
+				<label for="username" class="form-label">아이디</label>
+				<input class="field" id="username" name="username" maxlength="20" required autocomplete="username"
+					th:value="${form?.username}">
+				<p class="hint">영문, 숫자 4~20자</p>
+			</div>
+
+			<div>
+				<label for="password" class="form-label">비밀번호</label>
+				<input class="field" id="password" name="password" type="password" maxlength="50" required
+					autocomplete="new-password">
+				<p class="hint">6~50자</p>
+			</div>
+			<div>
+				<label for="passwordConfirm" class="form-label">비밀번호 확인</label>
+				<input class="field" id="passwordConfirm" name="passwordConfirm" type="password" maxlength="50" required
+					autocomplete="new-password">
+			</div>
+
+			<div>
+				<label for="nickname" class="form-label">닉네임</label>
+				<input class="field" id="nickname" name="nickname" maxlength="20" required th:value="${form?.nickname}">
+				<p class="hint">채팅에 보이는 이름, 2~20자</p>
+			</div>
+
+			<div>
+				<label for="email" class="form-label">이메일</label>
+				<div class="field-row">
+					<input class="field" id="email" name="email" type="email" maxlength="100" required
+						autocomplete="email" th:value="${form?.email}">
+					<button type="button" class="btn" id="sendBtn">인증번호 받기</button>
+				</div>
+				<div class="field-row hidden" id="codeRow" style="margin-top: 8px">
+					<label for="code" class="sr-only">인증번호</label>
+					<input class="field" id="code" placeholder="인증번호 6자리" maxlength="6" inputmode="numeric"
+						autocomplete="one-time-code">
+					<button type="button" class="btn" id="verifyBtn">확인</button>
+				</div>
+				<p class="hint" id="emailHint">이메일 인증 후 가입할 수 있어요.</p>
+			</div>
+
+			<button type="submit" class="btn btn-primary btn-block" id="submitBtn" disabled>가입하기</button>
+		</form>
+
+		<nav class="auth-links">
+			<span>이미 계정이 있나요? <a th:href="@{/login}">로그인</a></span>
+		</nav>
+	</main>
+
+	<script th:inline="javascript">
+		const emailVerified = /*[[${emailVerified}]]*/ false;
+		const el = id => document.getElementById(id);
+		let timer = null;
+
+		function lockVerified() {
+			if (timer) clearInterval(timer);
+			el('email').readOnly = true;
+			el('sendBtn').disabled = true;
+			el('sendBtn').textContent = '인증 완료';
+			el('codeRow').classList.add('hidden');
+			el('submitBtn').disabled = false;
+		}
+
+		el('sendBtn').onclick = async () => {
+			const email = el('email').value.trim();
+			if (!email) return setHint(el('emailHint'), '이메일을 입력하세요.', false);
+
+			el('sendBtn').disabled = true;
+			const r = await postJson('/api/email/send', {email, purpose: 'SIGNUP'});
+			setHint(el('emailHint'), r.message, r.ok);
+			if (r.ok) {
+				el('codeRow').classList.remove('hidden');
+				el('code').focus();
+				timer = cooldown(el('sendBtn'), 60, '인증번호 받기');
+			} else {
+				el('sendBtn').disabled = false;
+			}
+		};
+
+		async function verify() {
+			const r = await postJson('/api/email/verify', {
+				email: el('email').value.trim(), purpose: 'SIGNUP', code: el('code').value.trim()
+			});
+			setHint(el('emailHint'), r.message, r.ok);
+			if (r.ok) lockVerified();
+		}
+
+		el('verifyBtn').onclick = verify;
+		el('code').addEventListener('keydown', e => {
+			if (e.key === 'Enter') {e.preventDefault(); verify();}
+		});
+
+		if (emailVerified) {
+			lockVerified();
+			setHint(el('emailHint'), '이메일 인증이 완료되었습니다.', true);
+		}
+	</script>
+</body>
+
+</html>

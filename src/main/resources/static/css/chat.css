@@ -1,0 +1,521 @@
+/* ═════════ 채팅방 · 1:1 대화방 · 새 1:1 대화 (base.css 다음에 불러옴) ═════════ */
+
+/* ───── 머리: 방 이름 + 접속자 ───── */
+.room-title {
+	min-width: 0;
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+}
+
+.room-title h1 {
+	font-size: 18px;
+	font-weight: 700;
+	letter-spacing: -0.3px;
+	white-space: nowrap;
+}
+
+.room-title .hash {
+	color: var(--accent);
+}
+
+.room-title .sub {
+	font-size: 13px;
+	color: var(--muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.header-actions {
+	position: relative;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.header-actions form {
+	margin: 0;
+}
+
+/* 겹쳐 보이는 아바타 3개 */
+.avatar-stack {
+	display: flex;
+}
+
+.avatar-stack .avatar {
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	border: 2px solid #FFFFFF;
+	font-size: 11px;
+}
+
+.avatar-stack .avatar+.avatar {
+	margin-left: -8px;
+}
+
+/* [접속자] 누르면 펼쳐지는 목록 */
+.users-pop {
+	position: absolute;
+	top: calc(100% + 10px);
+	right: 0;
+	z-index: 20;
+	width: 270px;
+	max-height: 380px;
+	overflow-y: auto;
+	padding: 8px;
+	background: #FFFFFF;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	box-shadow: 0 12px 32px rgba(60, 40, 20, .12);
+}
+
+.users-pop h2 {
+	padding: 4px 8px 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.user-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px;
+	border-radius: 8px;
+}
+
+.user-row:hover {
+	background: #FAF8F5;
+}
+
+.user-row .name {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.user-row.me .name {
+	font-weight: 600;
+}
+
+.tag {
+	padding: 1px 7px;
+	border-radius: 6px;
+	background: #F3F0EC;
+	color: var(--ink-2);
+	font-size: 11px;
+}
+
+.mini-btn {
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--line-strong);
+	border-radius: 6px;
+	background: #FFFFFF;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.mini-btn:hover {
+	background: #FAF8F5;
+}
+
+.mini-btn.danger {
+	border-color: var(--danger-line);
+	color: var(--danger);
+}
+
+/* 1:1 대화방 머리: 상대 아바타 + 이름 + 접속 상태 */
+.dm-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.dm-head h1 {
+	font-size: 17px;
+	font-weight: 700;
+}
+
+.dm-status {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.dm-status.on {
+	color: var(--online-ink);
+}
+
+/* ───── 메시지 목록 ───── */
+.messages {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 16px 28px 8px;
+	display: flex;
+	flex-direction: column;
+}
+
+/* 맨 위: 이전 대화 더보기 */
+.top-bar {
+	padding: 4px 0 10px;
+	text-align: center;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.top-bar:empty {
+	display: none;
+}
+
+.top-bar button {
+	height: 30px;
+	padding: 0 14px;
+	border: 1px solid var(--line-strong);
+	border-radius: 15px;
+	background: #FFFFFF;
+	color: var(--ink-2);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+/* 메시지 한 줄: 아바타 | 이름 · 시각 / 내용 */
+.msg {
+	display: flex;
+	gap: 12px;
+	margin: 0 -10px;
+	padding: 6px 10px;
+	border-radius: 8px;
+}
+
+.msg:hover {
+	background: #FBFAF8;
+}
+
+.msg-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.msg-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.msg-name {
+	font-weight: 700;
+}
+
+.msg-time {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+/* 상대가 안 읽음 */
+.read-mark {
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--accent);
+}
+
+.bubble {
+	margin-top: 2px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.msg.deleted .bubble {
+	color: #6E665D;
+	font-style: italic;
+}
+
+/* 마우스를 올리면 오른쪽에 [삭제] */
+.del-btn {
+	margin-left: auto;
+	padding: 0 6px;
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	font-size: 12px;
+	cursor: pointer;
+	visibility: hidden;
+}
+
+.msg:hover .del-btn,
+.del-btn:focus-visible {
+	visibility: visible;
+}
+
+.del-btn:hover {
+	color: var(--danger);
+}
+
+/* 입장 · 퇴장 · 강퇴 안내 */
+.notice {
+	margin: 10px 0;
+	text-align: center;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.notice.kick {
+	color: var(--danger);
+}
+
+/* ───── 사진 · 파일 ───── */
+.bubble.has-img,
+.bubble.has-file {
+	margin-top: 6px;
+}
+
+.att-img img {
+	display: block;
+	max-width: 280px;
+	max-height: 260px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	cursor: zoom-in;
+}
+
+.att-file {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 300px;
+	max-width: 100%;
+	padding: 10px 12px;
+	border: 1px solid var(--line-strong);
+	border-radius: 10px;
+	text-decoration: none;
+	color: var(--ink);
+}
+
+.att-file:hover {
+	background: #FAF8F5;
+}
+
+.att-file .icon {
+	width: 38px;
+	height: 38px;
+	flex-shrink: 0;
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+	font-size: 10px;
+	font-weight: 700;
+}
+
+.att-meta {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.att-file .name {
+	font-size: 13px;
+	font-weight: 600;
+	word-break: break-all;
+}
+
+.att-file .size {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+/* ───── 입력칸 ───── */
+.composer {
+	flex-shrink: 0;
+	padding: 0 28px 20px;
+}
+
+.composer-box {
+	border: 1px solid var(--line-strong);
+	border-radius: 12px;
+	background: #FFFFFF;
+}
+
+.composer-box:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.composer-box input[type="text"],
+.composer-box input:not([type]) {
+	width: 100%;
+	height: 46px;
+	padding: 0 16px;
+	border: 0;
+	outline: none;
+	background: transparent;
+}
+
+.composer-tools {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 2px 8px 8px;
+}
+
+.send-btn {
+	width: 38px;
+	height: 34px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--accent);
+	color: #FFFFFF;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.send-btn:hover {
+	background: var(--accent-hover);
+}
+
+/* 입력 중 표시 (자리는 항상 차지 → 화면이 들썩이지 않음) */
+.typing {
+	height: 22px;
+	padding: 0 2px;
+	font-size: 12px;
+	color: var(--muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	visibility: hidden;
+}
+
+.typing.on {
+	visibility: visible;
+}
+
+.typing .dots span {
+	animation: typing-blink 1.4s infinite both;
+}
+
+.typing .dots span:nth-child(2) {
+	animation-delay: .2s;
+}
+
+.typing .dots span:nth-child(3) {
+	animation-delay: .4s;
+}
+
+@keyframes typing-blink {
+
+	0%,
+	80%,
+	100% {
+		opacity: .2;
+	}
+
+	40% {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.typing .dots span {
+		animation: none;
+	}
+}
+
+/* ───── 새 1:1 대화: 사용자 고르기 ───── */
+.picker {
+	max-width: 680px;
+	margin: 0 auto;
+	padding: 24px 32px 40px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.picker .side-search {
+	margin: 0;
+	height: 42px;
+}
+
+.pick-form {
+	margin: 0;
+}
+
+.pick-row {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	border: 0;
+	background: #FFFFFF;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pick-row:hover {
+	background: #FAF8F5;
+}
+
+#userList li+li {
+	border-top: 1px solid var(--line);
+}
+
+.pick-row .presence {
+	border-color: #FFFFFF;
+}
+
+.pick-name {
+	flex: 1;
+	min-width: 0;
+	font-weight: 600;
+}
+
+.pick-status {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.pick-status.on {
+	color: var(--online-ink);
+}
+
+.pick-go {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--accent-ink);
+}
+
+/* ───── 날짜 구분선 ───── */
+.day-divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 18px 0 10px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted);
+}
+
+.day-divider::before,
+.day-divider::after {
+	content: '';
+	flex: 1;
+	height: 1px;
+	background: var(--line);
+}
+
+.day-divider span {
+	padding: 3px 12px;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+	background: #FFFFFF;
+}

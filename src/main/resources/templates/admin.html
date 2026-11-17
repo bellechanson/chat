@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>관리자 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/settings.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('admin', null)}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<div class="admin-head">
+					<h1 class="pane-title">관리자</h1>
+					<nav class="tabs" aria-label="관리 메뉴">
+						<a th:href="@{/admin}" class="on" aria-current="page">채팅방 · 강퇴</a>
+						<a th:href="@{/admin/users}">회원</a>
+					</nav>
+				</div>
+			</header>
+
+			<div class="pane-body">
+				<div class="admin">
+					<div class="alert alert-info" th:if="${message}" th:text="${message}"></div>
+					<div class="alert alert-error" th:if="${error}" th:text="${error}"></div>
+
+					<!-- 채팅방 -->
+					<section>
+						<h2 class="section-title">채팅방<span class="count" th:text="${#lists.size(rooms)}">0</span></h2>
+						<div class="table-wrap" th:unless="${#lists.isEmpty(rooms)}">
+							<table class="table">
+								<thead>
+									<tr>
+										<th>방 이름</th>
+										<th>방장</th>
+										<th class="num">접속</th>
+										<th class="num">강퇴</th>
+										<th>만든 날</th>
+										<th class="num"><span class="sr-only">관리</span></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr th:each="r : ${rooms}">
+										<td><a class="room-link" th:href="@{/rooms/{id}(id=${r.id})}"><span
+													class="hash">#</span><span th:text="${r.name}">방</span></a></td>
+										<td th:text="${r.ownerNickname}">철수</td>
+										<td class="num js-room-count" th:attr="data-room-id=${r.id}"
+											th:text="${r.online}">0</td>
+										<td class="num" th:text="${r.bans}">0</td>
+										<td class="muted" th:text="${r.createdAt}">2026-11-13</td>
+										<td class="num">
+											<form th:action="@{/admin/rooms/{id}/delete(id=${r.id})}" method="post"
+												onsubmit="return confirm('이 방을 삭제할까요?\n모든 대화가 함께 삭제됩니다.');">
+												<button type="submit" class="btn btn-sm btn-danger">삭제</button>
+											</form>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<div class="table-wrap empty" th:if="${#lists.isEmpty(rooms)}">채팅방이 없어요.</div>
+					</section>
+
+					<!-- 강퇴 -->
+					<section>
+						<h2 class="section-title">강퇴 목록<span class="count" th:text="${#lists.size(bans)}">0</span>
+						</h2>
+						<div class="table-wrap" th:unless="${#lists.isEmpty(bans)}">
+							<table class="table">
+								<thead>
+									<tr>
+										<th>방</th>
+										<th>사용자</th>
+										<th>강퇴 일시</th>
+										<th class="num"><span class="sr-only">관리</span></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr th:each="b : ${bans}">
+										<td><span class="room-link"><span class="hash">#</span><span
+													th:text="${b.roomName}">방</span></span></td>
+										<td th:text="${b.nickname}">영희</td>
+										<td class="muted" th:text="${b.createdAt}">2026-11-13</td>
+										<td class="num">
+											<form th:action="@{/admin/bans/{id}/delete(id=${b.id})}" method="post"
+												onsubmit="return confirm('강퇴를 해제할까요?\n이 사용자는 다시 방에 들어갈 수 있습니다.');">
+												<button type="submit" class="btn btn-sm">해제</button>
+											</form>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<div class="table-wrap empty" th:if="${#lists.isEmpty(bans)}">강퇴된 사용자가 없어요.</div>
+					</section>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<!-- 사이드바 실시간 + 접속 수 갱신(js-room-count) + 권한 해제되면 바로 로그인 화면으로 -->
+	<script>
+		connectSocket();
+	</script>
+</body>
+
+</html>

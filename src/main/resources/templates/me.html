@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#D9480F">
+	<title>내 정보 - 실시간 채팅</title>
+	<link rel="manifest" href="/manifest.json">
+	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<link rel="stylesheet" th:href="@{/css/settings.css}">
+	<script th:src="@{/js/pwa.js}" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+	<script th:src="@{/js/socket.js}"></script>
+	<script th:src="@{/js/sidebar.js}"></script>
+</head>
+
+<body>
+	<div class="shell">
+		<nav th:replace="~{fragments/sidebar :: sidebar('me', null)}"></nav>
+
+		<main class="pane">
+			<header class="pane-header">
+				<h1 class="pane-title">내 정보와 설정</h1>
+			</header>
+
+			<div class="pane-body">
+				<div class="settings">
+
+					<!-- 프로필 -->
+					<section class="profile">
+						<span class="avatar avatar-accent avatar-lg" th:text="${sidebar.initial}">관</span>
+						<div>
+							<h2 th:text="${user.nickname}">관리자</h2>
+							<dl>
+								<div>
+									<dt>아이디</dt>
+									<dd th:text="${user.username}">admin</dd>
+								</div>
+								<div>
+									<dt>이메일</dt>
+									<dd th:text="${user.email}">a@b.com</dd>
+								</div>
+								<div>
+									<dt>가입일</dt>
+									<dd th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd')}">2026-11-09</dd>
+								</div>
+							</dl>
+						</div>
+					</section>
+
+					<!-- 닉네임 -->
+					<section class="set-section">
+						<div>
+							<h2>닉네임</h2>
+							<p class="set-desc">채팅에서 다른 사람에게 보이는 이름이에요.</p>
+						</div>
+						<div class="set-body">
+							<div class="alert alert-info" th:if="${nicknameMsg}" th:text="${nicknameMsg}"></div>
+							<div class="alert alert-error" th:if="${nicknameError}" th:text="${nicknameError}"></div>
+							<form th:action="@{/me/nickname}" method="post">
+								<label for="nickname" class="form-label">새 닉네임</label>
+								<div class="inline-form">
+									<input class="field" id="nickname" name="nickname" maxlength="20" required
+										th:value="${user.nickname}">
+									<button type="submit" class="btn btn-primary">변경</button>
+								</div>
+								<p class="hint">2~20자. 예전 메시지의 이름도 함께 바뀌어요.</p>
+							</form>
+						</div>
+					</section>
+
+					<!-- 비밀번호 -->
+					<section class="set-section">
+						<div>
+							<h2>비밀번호</h2>
+							<p class="set-desc">바꾸면 다른 기기의 로그인 유지는 그대로예요.</p>
+						</div>
+						<div class="set-body">
+							<div class="alert alert-info" th:if="${passwordMsg}" th:text="${passwordMsg}"></div>
+							<div class="alert alert-error" th:if="${passwordError}" th:text="${passwordError}"></div>
+							<form th:action="@{/me/password}" method="post" class="stack">
+								<div>
+									<label for="currentPassword" class="form-label">현재 비밀번호</label>
+									<input class="field" type="password" id="currentPassword" name="currentPassword"
+										maxlength="50" required autocomplete="current-password">
+								</div>
+								<div>
+									<label for="newPassword" class="form-label">새 비밀번호</label>
+									<input class="field" type="password" id="newPassword" name="newPassword"
+										maxlength="50" required autocomplete="new-password">
+									<p class="hint">6~50자</p>
+								</div>
+								<div>
+									<label for="newPasswordConfirm" class="form-label">새 비밀번호 확인</label>
+									<input class="field" type="password" id="newPasswordConfirm"
+										name="newPasswordConfirm" maxlength="50" required autocomplete="new-password">
+								</div>
+								<button type="submit" class="btn btn-primary">비밀번호 변경</button>
+							</form>
+						</div>
+					</section>
+
+					<!-- 알림 -->
+					<section class="set-section">
+						<div>
+							<h2>알림</h2>
+							<p class="set-desc">이 브라우저(또는 앱)에만 적용돼요.</p>
+						</div>
+						<div class="set-body">
+							<div class="switch-row">
+								<div>
+									<strong id="notifyTitle">데스크톱 알림</strong>
+									<small id="notifyState">창을 보고 있지 않을 때 새 메시지를 알려 드려요.</small>
+								</div>
+								<button type="button" class="switch" id="meNotifyBtn" role="switch" aria-checked="false"
+									aria-labelledby="notifyTitle"></button>
+							</div>
+						</div>
+					</section>
+				</div>
+			</div>
+		</main>
+	</div>
+
+	<script>
+		// 알림 스위치 (사이드바 아래 종 버튼과 같은 설정 → 둘 다 맞춰 줌)
+		const meBtn = document.getElementById('meNotifyBtn');
+
+		function renderNotify() {
+			const label = notifyLabel();   // 켜짐 / 꺼짐 / 차단됨 / 지원 안 함
+			const on = label === '켜짐';
+
+			meBtn.setAttribute('aria-checked', on);
+			meBtn.disabled = label === '지원 안 함';
+			document.getElementById('notifyState').textContent =
+				label === '차단됨' ? '브라우저에서 알림이 차단되어 있어요. 사이트 설정에서 허용해 주세요.'
+					: label === '지원 안 함' ? '이 브라우저는 데스크톱 알림을 지원하지 않아요.'
+						: '창을 보고 있지 않을 때 새 메시지를 알려 드려요.';
+
+			const bell = document.getElementById('notifyBtn');
+			if (bell) {
+				bell.classList.toggle('on', on);
+				bell.title = '데스크톱 알림: ' + label;
+				bell.setAttribute('aria-label', bell.title);
+			}
+		}
+
+		meBtn.addEventListener('click', async () => {
+			await toggleNotify();
+			renderNotify();
+		});
+		// 사이드바 종 버튼을 눌러도 스위치가 따라 바뀌게
+		document.getElementById('notifyBtn')?.addEventListener('click', () => setTimeout(renderNotify, 0));
+		renderNotify();
+
+		// 접속 상태 유지 + 사이드바 실시간 + 계정 변경 알림
+		connectSocket();
+	</script>
+</body>
+
+</html>

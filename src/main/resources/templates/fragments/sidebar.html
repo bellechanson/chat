@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<body>
+	<!--
+		공통 사이드바. 화면에서 이렇게 불러 씀:
+		  <nav th:replace="~{fragments/sidebar :: sidebar('room', ${room.id})}"></nav>
+		active: home | room | dm | me | admin,  activeId: 열린 방/대화 번호 (없으면 null)
+	-->
+	<nav th:fragment="sidebar(active, activeId)" id="sidebar" class="sidebar" aria-label="대화 목록"
+		th:attr="data-my-id=${sidebar.myId},data-my-nickname=${sidebar.nickname},data-active=${active},data-active-id=${activeId}">
+
+		<!-- 나 -->
+		<div class="side-me">
+			<span class="avatar avatar-accent"><span th:text="${sidebar.initial}">관</span><span
+					class="presence on"></span></span>
+			<span class="side-me-text">
+				<strong th:text="${sidebar.nickname}">관리자</strong>
+				<small>접속 중</small>
+			</span>
+			<a th:href="@{/me}" class="icon-btn" th:classappend="${active == 'me'} ? 'on'" aria-label="내 정보와 설정"
+				title="내 정보와 설정">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" aria-hidden="true">
+					<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"></path>
+					<circle cx="16" cy="6" r="2"></circle>
+					<circle cx="10" cy="12" r="2"></circle>
+					<circle cx="18" cy="18" r="2"></circle>
+				</svg>
+			</a>
+		</div>
+
+		<!-- 찾기 (화면에서 바로 거름) -->
+		<div class="side-search">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+				stroke-linecap="round" aria-hidden="true">
+				<circle cx="11" cy="11" r="7"></circle>
+				<path d="M20 20l-3.5-3.5"></path>
+			</svg>
+			<label for="sideFind" class="sr-only">방이나 사람 찾기</label>
+			<input id="sideFind" placeholder="방이나 사람 찾기" autocomplete="off">
+		</div>
+
+		<div class="side-scroll">
+			<!-- 메인 화면 (채팅방 목록) -->
+			<a th:href="@{/rooms}" class="side-item side-home" th:classappend="${active == 'home'} ? 'on'"
+				th:attr="aria-current=${active == 'home'} ? 'page' : null">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M3 10.5L12 3l9 7.5"></path>
+					<path d="M5 9.5V20h5v-6h4v6h5V9.5"></path>
+				</svg>
+				<span class="side-name">홈</span>
+			</a>
+			<!-- 채팅방 -->
+			<div class="side-head">
+				<h2>채팅방</h2>
+				<button type="button" class="icon-btn sm" id="newRoomBtn" aria-label="새 채팅방 만들기" aria-expanded="false"
+					aria-controls="newRoomForm" title="새 채팅방 만들기">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						stroke-linecap="round" aria-hidden="true">
+						<path d="M12 5v14M5 12h14"></path>
+					</svg>
+				</button>
+			</div>
+			<!-- + 를 누르면 펼쳐지는 새 채팅방 입력칸 -->
+			<form id="newRoomForm" class="side-new hidden" th:action="@{/rooms}" method="post">
+				<label for="sideNewRoom" class="sr-only">새 채팅방 이름</label>
+				<input id="sideNewRoom" name="name" class="field" placeholder="새 채팅방 이름" maxlength="30" required>
+				<button type="submit" class="btn btn-primary btn-sm">만들기</button>
+			</form>
+			<ul id="sideRooms">
+				<li th:each="r : ${sidebar.rooms}"
+					th:attr="data-room-id=${r.id},data-joined=${r.unread != null},data-name=${r.name}">
+					<a th:href="@{/rooms/{id}(id=${r.id})}" class="side-item"
+						th:classappend="${active == 'room' and activeId == r.id} ? 'on'">
+						<span class="hash">#</span>
+						<span class="side-name" th:text="${r.name}">자유방</span>
+						<span class="unread" th:with="current=${active == 'room' and activeId == r.id}"
+							th:attr="data-n=${current or r.unread == null ? 0 : r.unread}"
+							th:classappend="${current or r.unread == null or r.unread == 0} ? 'hidden'"
+							th:text="${r.unread != null and r.unread > 99} ? '99+' : ${r.unread}">3</span>
+						<span class="side-count js-room-count hide-zero" th:attr="data-room-id=${r.id}"
+							th:classappend="${r.online == 0} ? 'hidden'" th:text="${r.online} + '명'">3명</span>
+					</a>
+				</li>
+			</ul>
+			<p class="side-empty" id="sideRoomEmpty" th:classappend="${#lists.isEmpty(sidebar.rooms)} ? '' : 'hidden'">
+				아직 채팅방이 없어요</p>
+
+			<!-- 1:1 대화 -->
+			<div class="side-head">
+				<h2>1:1 대화</h2>
+				<a th:href="@{/dm}" class="icon-btn sm" aria-label="새 1:1 대화" title="새 1:1 대화">
+					<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						stroke-linecap="round" aria-hidden="true">
+						<path d="M12 5v14M5 12h14"></path>
+					</svg>
+				</a>
+			</div>
+			<ul id="sideDms">
+				<li th:each="d : ${sidebar.dms}"
+					th:attr="data-conv-id=${d.id},data-partner-id=${d.partnerId},data-name=${d.partnerNickname}">
+					<a th:href="@{/dm/{id}(id=${d.id})}" class="side-item"
+						th:classappend="${active == 'dm' and activeId == d.id} ? 'on'">
+						<span class="avatar avatar-sm" th:classappend="'av-' + ${d.tint}"><span
+								th:text="${d.initial}">영</span><span class="presence"
+								th:classappend="${d.online} ? 'on'"></span></span>
+						<span class="side-text">
+							<span class="side-name" th:text="${d.partnerNickname}">영희</span>
+							<span class="side-preview" th:text="${d.lastMessage}">마지막 메시지</span>
+						</span>
+						<span class="unread" th:attr="data-n=${d.unread}" th:classappend="${d.unread == 0} ? 'hidden'"
+							th:text="${d.unread > 99} ? '99+' : ${d.unread}">1</span>
+					</a>
+				</li>
+			</ul>
+			<p class="side-empty" id="sideDmEmpty" th:classappend="${#lists.isEmpty(sidebar.dms)} ? '' : 'hidden'">
+				+ 버튼으로 대화를 시작하세요</p>
+		</div>
+
+		<!-- 아래: 관리자 화면, 알림, 로그아웃 -->
+		<div class="side-foot">
+			<a th:if="${sidebar.admin}" th:href="@{/admin}" class="side-item"
+				th:classappend="${active == 'admin'} ? 'on'">
+				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path>
+				</svg>관리자 화면
+			</a>
+			<span class="spacer" th:unless="${sidebar.admin}"></span>
+			<button type="button" class="icon-btn" id="notifyBtn" aria-label="데스크톱 알림" title="데스크톱 알림">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"></path>
+					<path d="M10 21h4"></path>
+				</svg>
+			</button>
+			<form th:action="@{/logout}" method="post">
+				<button type="submit" class="icon-btn" aria-label="로그아웃" title="로그아웃">
+					<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+						stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+						<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+						<path d="M16 17l5-5-5-5"></path>
+						<path d="M21 12H9"></path>
+					</svg>
+				</button>
+			</form>
+		</div>
+	</nav>
+</body>
+
+</html>
