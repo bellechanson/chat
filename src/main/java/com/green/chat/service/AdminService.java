@@ -90,7 +90,8 @@ public class AdminService {
 
 	// ───────── 회원 ─────────
 	public List<UserRow> users(String keyword, Long myId, Set<Long> onlineIds) {
-		List<ChatUser> users = (keyword == null || keyword.isBlank()) ? userRepository.findAllByOrderByIdDesc()
+		List<ChatUser> users = (keyword == null || keyword.isBlank())
+				? userRepository.findAllByWithdrawnAtIsNullOrderByIdDesc()
 				: userRepository.search(keyword.trim());
 
 		return users.stream()
@@ -140,6 +141,6 @@ public class AdminService {
 		if (ids.isEmpty())
 			return Map.of();
 		return userRepository.findAllById(ids.stream().distinct().toList()).stream()
-				.collect(Collectors.toMap(ChatUser::getId, ChatUser::getNickname));
+				.collect(Collectors.toMap(ChatUser::getId, ChatUser::getDisplayName));
 	}
 }

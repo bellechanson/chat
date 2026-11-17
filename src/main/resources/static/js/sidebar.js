@@ -6,8 +6,10 @@ function tintOf(name) {
     return name ? name.codePointAt(0) % 6 : 0;
 }
 
+// "(탈퇴한 사용자)"처럼 괄호로 시작하면 괄호는 건너뜀 (서버 Formats.initial과 같은 규칙)
 function initialOf(name) {
-    return name ? String.fromCodePoint(name.codePointAt(0)) : '?';
+    const n = name && name.startsWith('(') ? name.slice(1) : name;
+    return n ? String.fromCodePoint(n.codePointAt(0)) : '?';
 }
 
 function sidebarInfo() {
@@ -92,6 +94,67 @@ function onSideDm(m, info) {
     document.getElementById('sideDmEmpty')?.classList.add('hidden');
 }
 
+// 사이드바에서 대화 한 줄 지우기 (비면 안내 문구)
+function removeSideDm(convId) {
+    document.querySelector(`#sideDms li[data-conv-id="${convId}"]`)?.remove();
+    const list = document.getElementById('sideDms');
+    if (list && list.children.length === 0) document.getElementById('sideDmEmpty')?.classList.remove('hidden');
+}
+
+// ───── 1:1 대화방 나가기 ─────
+// 내 목록에서만 사라지고 상대에게는 알리지 않음. 상대가 다시 보내면 이전 대화와 함께 다시 나타남
+//   (대화 화면 머리의 [나가기] 버튼도 이 함수를 씀)
+function leaveDm(convId, partnerName) {
+    const ok = confirm(`${partnerName || '이'}님과의 대화방에서 나갈까요?\n\n`
+        + '· 내 대화 목록에서만 사라지고, 상대에게는 알리지 않아요.\n'
+        + '· 상대가 다시 메시지를 보내면 이전 대화와 함께 다시 나타나요.');
+    if (!ok) return;
+
+    const form = document.getElementById('dmLeaveForm');
+    if (!form) return;
+    form.action = `/dm/${convId}/leave`;
+    form.elements.back.value = location.pathname;   // 나간 뒤 지금 화면으로 돌아오기 (그 대화를 보고 있었으면 홈)
+    form.submit();
+}
+
+// 우클릭 메뉴 (한 개를 만들어 두고 위치만 옮겨 씀)
+let sideMenu = null;
+
+function closeSideMenu() {
+    if (sideMenu) sideMenu.classList.add('hidden');
+}
+
+function openSideMenu(x, y, items) {
+    if (!sideMenu) {
+        sideMenu = document.createElement('div');
+        sideMenu.className = 'ctx-menu hidden';
+        sideMenu.setAttribute('role', 'menu');
+        document.body.appendChild(sideMenu);
+        sideMenu.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeSideMenu();
+        });
+    }
+    sideMenu.replaceChildren(...items.map(item => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'menuitem');
+        b.className = item.danger ? 'danger' : '';
+        b.textContent = item.label;
+        b.addEventListener('click', () => {
+            closeSideMenu();
+            item.action();
+        });
+        return b;
+    }));
+
+    // 화면 밖으로 나가지 않게 위치 맞추기
+    sideMenu.classList.remove('hidden');
+    const w = sideMenu.offsetWidth, h = sideMenu.offsetHeight;
+    sideMenu.style.left = Math.min(x, window.innerWidth - w - 8) + 'px';
+    sideMenu.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
+    sideMenu.querySelector('button')?.focus();
+}
+
 // 연결될 때마다 (재연결 포함) socket.js가 부름
 function watchSidebar(client) {
     const info = sidebarInfo();
@@ -112,6 +175,13 @@ function watchSidebar(client) {
     });
 
     client.subscribe('/user/queue/dm', f => onSideDm(JSON.parse(f.body), info));
+
+    // 내가 (다른 탭에서) 대화방을 나감 → 목록에서 지우기, 그 대화를 보고 있었으면 홈으로
+    client.subscribe('/user/queue/dm-hidden', f => {
+        const e = JSON.parse(f.body);
+        removeSideDm(e.conversationId);
+        if (info.active === 'dm' && info.activeId === e.conversationId) location.href = '/rooms';
+    });
 
     // 내가 읽음 → 그 대화 뱃지 지우기
     client.subscribe('/user/queue/dm-read', f => {
@@ -151,6 +221,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // 1:1 대화 우클릭 → [대화방 나가기] (키보드 메뉴 키 / Shift+F10도 같은 이벤트)
+    document.getElementById('sideDms')?.addEventListener('contextmenu', (e) => {
+        const li = e.target.closest('li[data-conv-id]');
+        if (!li) return;
+        e.preventDefault();
+
+        // 키보드로 연 경우(좌표 0)는 그 줄 옆에 띄움
+        let x = e.clientX, y = e.clientY;
+        if (!x && !y) {
+            const r = li.getBoundingClientRect();
+            x = r.left + 24;
+            y = r.bottom;
+        }
+        openSideMenu(x, y, [
+            { label: '대화방 나가기', danger: true, action: () => leaveDm(li.dataset.convId, li.dataset.name) }
+        ]);
+    });
+    // 메뉴 밖을 누르거나, 스크롤·창 크기 변경·창 전환 때 닫기
+    document.addEventListener('mousedown', (e) => {
+        if (sideMenu && !sideMenu.contains(e.target)) closeSideMenu();
+    });
+    window.addEventListener('resize', closeSideMenu);
+    window.addEventListener('blur', closeSideMenu);
+    document.addEventListener('scroll', closeSideMenu, true);
 
     // 찾기: 이름에 글자가 들어간 방·대화만 보이기
     document.getElementById('sideFind')?.addEventListener('input', (e) => {

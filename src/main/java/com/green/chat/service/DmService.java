@@ -74,19 +74,24 @@ public class DmService {
 		if (partner.getId().equals(myId)) {
 			throw new IllegalArgumentException("자기 자신과는 대화할 수 없습니다.");
 		}
+		if (partner.isWithdrawn()) {
+			throw new IllegalArgumentException("탈퇴한 사용자와는 대화할 수 없습니다.");
+		}
 		if (partner.isSuspended()) {
 			throw new IllegalArgumentException("정지된 사용자와는 대화할 수 없습니다.");
 		}
 		long user1 = Math.min(myId, partner.getId());
 		long user2 = Math.max(myId, partner.getId());
-		return conversationRepository.findByUser1IdAndUser2Id(user1, user2)
+		DmConversation c = conversationRepository.findByUser1IdAndUser2Id(user1, user2)
 				.orElseGet(() -> conversationRepository.save(new DmConversation(user1, user2)));
+		c.showFor(myId); // 예전에 나갔던 대화면 이전 대화와 함께 다시 보이게
+		return c;
 	}
 
-	// 대화 상대로 고를 수 있는 사용자 (나, 정지된 사용자 제외)
+	// 대화 상대로 고를 수 있는 사용자 (나, 정지·탈퇴한 사용자 제외)
 	public List<ChatUser> selectableUsers(Long myId) {
-		return userRepository.findAllByOrderByNicknameAsc().stream().filter(u -> !u.getId().equals(myId))
-				.filter(u -> !u.isSuspended()).toList();
+		return userRepository.findAllByWithdrawnAtIsNullOrderByNicknameAsc().stream()
+				.filter(u -> !u.getId().equals(myId)).filter(u -> !u.isSuspended()).toList();
 	}
 
 	// 참여자일 때만 대화방 반환
@@ -95,7 +100,25 @@ public class DmService {
 	}
 
 	public String partnerNickname(DmConversation c, Long userId) {
-		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::getNickname).orElse("(탈퇴한 사용자)");
+		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::getDisplayName)
+				.orElse(ChatUser.WITHDRAWN_NAME);
+	}
+
+	// 상대가 탈퇴했는지 (DB에서 직접 지운 예전 회원도 탈퇴로 봄) → 대화 화면 입력칸 막기
+	public boolean isPartnerGone(DmConversation c, Long userId) {
+		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::isWithdrawn).orElse(true);
+	}
+
+	// 나갔던 대화를 주소로 직접 열면 다시 목록에 보이게
+	@Transactional
+	public void reopen(Long conversationId, Long userId) {
+		findForMember(conversationId, userId).filter(c -> c.isHiddenFor(userId)).ifPresent(c -> c.showFor(userId));
+	}
+
+	// ── 대화방 나가기: 내 목록에서만 숨김 (메시지·상대 화면은 그대로, 상대에게 알리지 않음) ──
+	@Transactional
+	public void leave(Long conversationId, Long userId) {
+		member(conversationId, userId).hideFor(userId); // 변경 감지로 UPDATE
 	}
 
 	// 참여자일 때만 상대 로그인 아이디 (입력 중 신호 전달용)
@@ -104,15 +127,16 @@ public class DmService {
 				.map(ChatUser::getUsername);
 	}
 
-	// ── 대화 목록 (메시지가 하나라도 있는 대화만) ──
+	// ── 대화 목록 (메시지가 하나라도 있고, 내가 나가지 않은 대화만) ──
 	public List<DmConversationView> conversations(Long userId) {
-		List<DmConversation> convs = conversationRepository.findMine(userId);
+		List<DmConversation> convs = conversationRepository.findMine(userId).stream()
+				.filter(c -> !c.isHiddenFor(userId)).toList();
 		if (convs.isEmpty())
 			return List.of();
 
-		// 상대 닉네임 한 번에 조회
+		// 상대 이름 한 번에 조회 (탈퇴했으면 "(탈퇴한 사용자)")
 		Map<Long, String> names = userRepository.findAllById(convs.stream().map(c -> c.partnerOf(userId)).toList())
-				.stream().collect(Collectors.toMap(ChatUser::getId, ChatUser::getNickname));
+				.stream().collect(Collectors.toMap(ChatUser::getId, ChatUser::getDisplayName));
 
 		// 마지막 메시지 한 번에 조회
 		Map<Long, DmMessage> last = messageRepository
@@ -129,13 +153,13 @@ public class DmService {
 				.map(c -> {
 					DmMessage m = last.get(c.getId());
 					return new DmConversationView(c.getId(), c.partnerOf(userId),
-							names.getOrDefault(c.partnerOf(userId), "(탈퇴한 사용자)"),
+							names.getOrDefault(c.partnerOf(userId), ChatUser.WITHDRAWN_NAME),
 							m.isDeleted() ? "삭제된 메시지입니다" : m.getContent(), unread.getOrDefault(c.getId(), 0L));
 				}).toList();
 	}
 
 	public long totalUnread(Long userId) {
-		return messageRepository.countAllUnread(userId);
+		return messageRepository.countAllUnread(userId, Boolean.TRUE);
 	}
 
 	// ── 이전 대화 (커서 페이징) ──
@@ -151,13 +175,16 @@ public class DmService {
 		Collections.reverse(page);
 
 		Map<Long, String> names = nicknames(c);
-		return new DmPage(page.stream().map(m -> DmMessageDto.from(m, names.get(m.getSenderId()))).toList(), hasMore);
+		return new DmPage(page.stream()
+				.map(m -> DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME))).toList(),
+				hasMore);
 	}
 
 	// ── 보내기 ──
 	@Transactional
 	public Sent send(Long conversationId, Long senderId, String senderNickname, String content) {
 		DmConversation c = member(conversationId, senderId);
+		checkPartner(c, senderId);
 
 		String text = Formats.cut(content, MAX_CONTENT);
 		if (text.isEmpty())
@@ -170,13 +197,14 @@ public class DmService {
 	@Transactional
 	public Sent sendFile(Long conversationId, Long senderId, String senderNickname, MultipartFile file) {
 		DmConversation c = member(conversationId, senderId);
+		checkPartner(c, senderId);
 		Attachment att = fileStorage.store("dm/" + conversationId, file);
 		return saveAndReturn(c, senderId, senderNickname, new DmMessage(c, senderId, att.label(), att));
 	}
 
 	private Sent saveAndReturn(DmConversation c, Long senderId, String senderNickname, DmMessage message) {
 		DmMessage saved = messageRepository.save(message);
-		c.touch(); // 목록 정렬용 시각 갱신 (변경 감지로 UPDATE)
+		c.touch(); // 목록 정렬용 시각 갱신 + 나갔던 사람에게 다시 보이게 (변경 감지로 UPDATE)
 
 		String partnerUsername = userRepository.findById(c.partnerOf(senderId)).map(ChatUser::getUsername).orElse(null);
 		return new Sent(DmMessageDto.from(saved, senderNickname), partnerUsername);
@@ -218,6 +246,13 @@ public class DmService {
 		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
 	}
 
+	// 탈퇴한 사람에게는 보낼 수 없음
+	private void checkPartner(DmConversation c, Long senderId) {
+		if (isPartnerGone(c, senderId)) {
+			throw new IllegalArgumentException("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.");
+		}
+	}
+
 	// 참여자가 아니면 예외
 	private DmConversation member(Long conversationId, Long userId) {
 		return findForMember(conversationId, userId)
@@ -226,6 +261,6 @@ public class DmService {
 
 	private Map<Long, String> nicknames(DmConversation c) {
 		return userRepository.findAllById(List.of(c.getUser1Id(), c.getUser2Id())).stream()
-				.collect(Collectors.toMap(ChatUser::getId, ChatUser::getNickname));
+				.collect(Collectors.toMap(ChatUser::getId, ChatUser::getDisplayName));
 	}
 }

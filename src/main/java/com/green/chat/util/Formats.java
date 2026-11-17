@@ -45,9 +45,12 @@ public final class Formats {
 		return (name == null || name.isEmpty()) ? 0 : Math.floorMod(name.codePointAt(0), 6);
 	}
 
-	// 아바타에 넣을 첫 글자
+	// 아바타에 넣을 첫 글자 ("(탈퇴한 사용자)"처럼 괄호로 시작하면 괄호는 건너뜀, JS initialOf와 같은 규칙)
 	public static String initial(String name) {
-		return (name == null || name.isEmpty()) ? "?" : name.substring(0, name.offsetByCodePoints(0, 1));
+		if (name == null)
+			return "?";
+		String n = name.startsWith("(") ? name.substring(1) : name;
+		return n.isEmpty() ? "?" : n.substring(0, n.offsetByCodePoints(0, 1));
 	}
 
 }

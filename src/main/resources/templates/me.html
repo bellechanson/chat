@@ -118,6 +118,30 @@
 							</div>
 						</div>
 					</section>
+
+					<!-- 회원 탈퇴 -->
+					<section class="set-section set-danger">
+						<div>
+							<h2>회원 탈퇴</h2>
+							<p class="set-desc">탈퇴하면 되돌릴 수 없어요.</p>
+						</div>
+						<div class="set-body">
+							<div class="alert alert-error" th:if="${withdrawError}" th:text="${withdrawError}"></div>
+							<ul class="danger-list">
+								<li>모든 기기에서 로그아웃되고, 이 계정으로 다시 로그인할 수 없어요.</li>
+								<li>보낸 메시지는 지워지지 않고 <strong>(탈퇴한 사용자)</strong>로 표시돼요.</li>
+								<li>같은 아이디·닉네임·이메일로 새로 가입할 수 있어요.</li>
+							</ul>
+							<form th:action="@{/me/withdraw}" method="post" class="stack" id="withdrawForm">
+								<div>
+									<label for="withdrawPassword" class="form-label">비밀번호 확인</label>
+									<input class="field" type="password" id="withdrawPassword" name="password"
+										maxlength="50" required autocomplete="current-password">
+								</div>
+								<button type="submit" class="btn btn-danger">회원 탈퇴</button>
+							</form>
+						</div>
+					</section>
 				</div>
 			</div>
 		</main>
@@ -155,7 +179,19 @@
 		renderNotify();
 
 		// 접속 상태 유지 + 사이드바 실시간 + 계정 변경 알림
-		connectSocket();
+		const meClient = connectSocket();
+
+		// 회원 탈퇴: 한 번 더 확인. 보내기 전에 실시간 연결을 끊어서
+		//   (서버가 보내는 "탈퇴로 로그아웃" 알림은 다른 탭용 → 이 화면에는 안 뜨게)
+		document.getElementById('withdrawForm').addEventListener('submit', (e) => {
+			if (!confirm('정말 탈퇴할까요?\n탈퇴하면 되돌릴 수 없어요.')) {
+				e.preventDefault();
+				return;
+			}
+			try {
+				meClient?.deactivate();
+			} catch (err) { /* 이미 끊겼으면 무시 */}
+		});
 	</script>
 </body>
 

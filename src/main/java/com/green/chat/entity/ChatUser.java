@@ -49,6 +49,13 @@ public class ChatUser {
 	@Column(nullable = false)
 	private LocalDateTime createdAt;
 
+	// 탈퇴 시각 (탈퇴 안 했으면 null). 메시지 기록 때문에 행은 지우지 않고 개인정보만 지움
+	@Column(name = "withdrawn_at")
+	private LocalDateTime withdrawnAt;
+
+	// 화면에 보이는 탈퇴 회원 이름 (닉네임으로는 쓸 수 없게 막아 둠)
+	public static final String WITHDRAWN_NAME = "(탈퇴한 사용자)";
+
 	protected ChatUser() {
 	}
 
@@ -90,6 +97,32 @@ public class ChatUser {
 
 	public boolean isAdmin() {
 		return role == Role.ADMIN;
+	}
+
+	// 회원 탈퇴: 아이디·닉네임·이메일을 비워 다시 가입할 수 있게 하고, 로그인은 못 하게 함
+	// username "_wd12" : 가입 규칙(영문/숫자)에 맞지 않아 다른 사람이 같은 아이디를 만들 수 없음
+	// nickname "탈퇴#12" : 닉네임에 #을 못 쓰게 막아 둬서 겹치지 않음 (화면에는 WITHDRAWN_NAME으로 보임)
+	public void withdraw(String encodedRandomPassword) {
+		this.username = "_wd" + id;
+		this.nickname = "탈퇴#" + id;
+		this.email = "wd" + id + "@withdrawn.local";
+		this.password = encodedRandomPassword;
+		this.role = Role.USER;
+		this.suspended = true;
+		this.withdrawnAt = LocalDateTime.now();
+	}
+
+	public boolean isWithdrawn() {
+		return withdrawnAt != null;
+	}
+
+	// 다른 사람에게 보이는 이름 (탈퇴했으면 "(탈퇴한 사용자)")
+	public String getDisplayName() {
+		return isWithdrawn() ? WITHDRAWN_NAME : nickname;
+	}
+
+	public LocalDateTime getWithdrawnAt() {
+		return withdrawnAt;
 	}
 
 	public Role getRole() {

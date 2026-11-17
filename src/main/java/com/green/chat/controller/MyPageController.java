@@ -1,10 +1,12 @@
 package com.green.chat.controller;
 
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Controller;
@@ -15,10 +17,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import com.green.chat.dto.AccountEvent;
 import com.green.chat.entity.ChatUser;
+import com.green.chat.security.LoginSessionManager;
 import com.green.chat.security.LoginUser;
 import com.green.chat.service.UserService;
 
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -27,11 +32,16 @@ import jakarta.servlet.http.HttpServletResponse;
 public class MyPageController {
 
 	private final UserService userService;
+	private final LoginSessionManager sessionManager;
+	private final SimpMessageSendingOperations messagingTemplate;
 	// 로그인 정보를 세션에 다시 저장하는 도구
 	private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
-	public MyPageController(UserService userService) {
+	public MyPageController(UserService userService, LoginSessionManager sessionManager,
+			SimpMessageSendingOperations messagingTemplate) {
 		this.userService = userService;
+		this.sessionManager = sessionManager;
+		this.messagingTemplate = messagingTemplate;
 	}
 
 	@GetMapping
@@ -66,6 +76,34 @@ public class MyPageController {
 			ra.addFlashAttribute("passwordError", e.getMessage());
 		}
 		return "redirect:/me";
+	}
+
+	// 회원 탈퇴 → 모든 기기 로그아웃 → 로그인 화면
+	@PostMapping("/withdraw")
+	public String withdraw(@RequestParam String password, @AuthenticationPrincipal LoginUser loginUser,
+			HttpServletRequest request, HttpServletResponse response, RedirectAttributes ra) {
+		String oldUsername;
+		try {
+			oldUsername = userService.withdraw(loginUser.getId(), password);
+		} catch (IllegalArgumentException e) {
+			ra.addFlashAttribute("withdrawError", e.getMessage());
+			return "redirect:/me";
+		}
+
+		// 다른 탭·기기: 세션 만료 + 열려 있는 화면에 알림 (socket.js가 받아서 로그인 화면으로 보냄)
+		sessionManager.expireUser(loginUser.getId());
+		messagingTemplate.convertAndSendToUser(oldUsername, "/queue/account",
+				new AccountEvent("회원 탈퇴가 완료되어 로그아웃되었습니다."));
+
+		// 지금 이 브라우저: 세션 끝내기 + 로그인 유지 쿠키 지우기
+		new SecurityContextLogoutHandler().logout(request, response,
+				SecurityContextHolder.getContext().getAuthentication());
+		Cookie remember = new Cookie("remember-me", null);
+		remember.setPath(request.getContextPath().isEmpty() ? "/" : request.getContextPath());
+		remember.setMaxAge(0);
+		response.addCookie(remember);
+
+		return "redirect:/login?withdrawn";
 	}
 
 	// 세션에 들어 있는 로그인 정보(LoginUser)를 최신 값으로 교체

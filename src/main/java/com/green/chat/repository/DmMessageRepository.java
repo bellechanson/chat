@@ -37,14 +37,18 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, Long> {
 			""")
 	List<Object[]> countUnreadByUser(@Param("userId") Long userId);
 
-	// 전체 안 읽은 수 (방 목록 헤더 뱃지용)
+	// 전체 안 읽은 수 (앱 아이콘 뱃지용) — 내가 나간(숨긴) 대화는 세지 않음
 	@Query("""
 			select count(m.id) from DmMessage m
 			 where (m.conversation.user1Id = :userId or m.conversation.user2Id = :userId)
 			   and m.senderId <> :userId
 			   and m.readAt is null
+			   and not exists (select c.id from DmConversation c
+			                    where c.id = m.conversation.id
+			                      and ((c.user1Id = :userId and c.user1Hidden = :hidden)
+			                        or (c.user2Id = :userId and c.user2Hidden = :hidden)))
 			""")
-	long countAllUnread(@Param("userId") Long userId);
+	long countAllUnread(@Param("userId") Long userId, @Param("hidden") Boolean hidden);
 
 	// 이 대화방에서 내가 받은 메시지를 모두 읽음 처리 (바뀐 행 수 반환)
 	@Modifying

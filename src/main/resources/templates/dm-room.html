@@ -32,14 +32,24 @@
 					<div>
 						<h1 th:text="${partnerNickname}">영희</h1>
 						<span class="dm-status" id="partnerStatus" th:classappend="${partnerOnline} ? 'on'"
-							th:text="${partnerOnline} ? '접속 중' : '오프라인'">접속 중</span>
+							th:text="${partnerGone} ? '대화할 수 없는 사용자' : (${partnerOnline} ? '접속 중' : '오프라인')">접속 중</span>
 					</div>
+				</div>
+				<div class="header-actions">
+					<!-- 내 목록에서만 사라짐 (sidebar.js leaveDm) -->
+					<button type="button" class="btn btn-sm" id="leaveBtn">대화방 나가기</button>
 				</div>
 			</header>
 
 			<div id="messages" class="messages"></div>
 
-			<div th:replace="~{fragments/parts :: composer(placeholder=${partnerNickname + '님에게 메시지 보내기'})}"></div>
+			<!-- 상대가 탈퇴했으면 입력칸 대신 안내 (th:replace가 th:if보다 먼저 처리되므로 th:block으로 감쌈) -->
+			<th:block th:unless="${partnerGone}">
+				<div th:replace="~{fragments/parts :: composer(placeholder=${partnerNickname + '님에게 메시지 보내기'})}"></div>
+			</th:block>
+			<div class="composer" th:if="${partnerGone}">
+				<p class="composer-closed">탈퇴한 사용자와는 더 이상 대화할 수 없어요. 이전 대화는 그대로 볼 수 있고, [대화방 나가기]로 목록에서 정리할 수 있어요.</p>
+			</div>
 		</main>
 	</div>
 
@@ -47,6 +57,8 @@
 		const convId = /*[[${conversationId}]]*/ 0;
 		const myId = /*[[${myId}]]*/ 0;
 		const partnerId = /*[[${partnerId}]]*/ 0;
+		const partnerName = /*[[${partnerNickname}]]*/ '';
+		const canSend = !/*[[${partnerGone}]]*/ false;   // 상대가 탈퇴했으면 입력칸이 없음
 
 		const el = id => document.getElementById(id);
 
@@ -101,6 +113,7 @@
 
 		// 상대 접속 상태 (머리의 초록 점, "접속 중"/"오프라인")
 		function onOnline(ids) {
+			if (!canSend) return;   // 탈퇴한 상대는 표시 고정
 			const on = ids.map(String).includes(String(partnerId));
 			el('partnerDot').classList.toggle('on', on);
 			el('partnerStatus').classList.toggle('on', on);
@@ -132,21 +145,15 @@
 			});
 		}
 
+		// ── 대화방 나가기 (sidebar.js의 leaveDm: 확인 후 나가고 홈으로) ──
+		el('leaveBtn').addEventListener('click', () => leaveDm(convId, partnerName));
+
 		// ── 입력 중 표시 ──
 		const TYPING_SHOW_MS = 4000;   // 신호가 이 시간 동안 안 오면 숨김
 		let typingHideTimer = null;
 
-		// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
-		const typing = watchTyping(el('content'), (on) => {
-			if (!client || !client.connected) return;
-			client.publish({
-				destination: `/app/dm/${convId}/typing`,
-				body: JSON.stringify({typing: on})
-			});
-		});
-
 		function onTyping(e) {
-			if (e.conversationId !== convId) return;
+			if (e.conversationId !== convId || !el('typing')) return;
 			if (!e.typing) return hideTyping();
 
 			el('typingText').textContent = `${e.nickname}님이 입력 중`;
@@ -157,36 +164,47 @@
 
 		function hideTyping() {
 			clearTimeout(typingHideTimer);
-			el('typing').classList.remove('on');
+			el('typing')?.classList.remove('on');
 		}
 
-		// ── 보내기 ──
-		function sendMessage() {
-			const input = el('content');
-			const content = input.value.trim();
-			if (!content || !client || !client.connected) return;
-
-			client.publish({
-				destination: `/app/dm/${convId}/send`,
-				body: JSON.stringify({content})
+		// ── 보내기 · 입력 중 신호 · 첨부 (상대가 탈퇴했으면 입력칸이 없으니 건너뜀) ──
+		if (canSend) {
+			// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
+			const typing = watchTyping(el('content'), (on) => {
+				if (!client || !client.connected) return;
+				client.publish({
+					destination: `/app/dm/${convId}/typing`,
+					body: JSON.stringify({typing: on})
+				});
 			});
-			input.value = '';
-			input.focus();
-			typing.sent();
+
+			function sendMessage() {
+				const input = el('content');
+				const content = input.value.trim();
+				if (!content || !client || !client.connected) return;
+
+				client.publish({
+					destination: `/app/dm/${convId}/send`,
+					body: JSON.stringify({content})
+				});
+				input.value = '';
+				input.focus();
+				typing.sent();
+			}
+
+			el('sendBtn').onclick = sendMessage;
+			el('content').addEventListener('keydown', e => {
+				if (e.key === 'Enter' && !e.isComposing) sendMessage();
+			});
+
+			// [첨부] 버튼, 붙여넣기, 끌어다 놓기 (files.js)
+			setupAttach({
+				button: el('attachBtn'),
+				input: el('fileInput'),
+				textInput: el('content'),
+				uploadUrl: `/api/dm/${convId}/files`
+			});
 		}
-
-		el('sendBtn').onclick = sendMessage;
-		el('content').addEventListener('keydown', e => {
-			if (e.key === 'Enter' && !e.isComposing) sendMessage();
-		});
-
-		// [첨부] 버튼, 붙여넣기 (files.js)
-		setupAttach({
-			button: el('attachBtn'),
-			input: el('fileInput'),
-			textInput: el('content'),
-			uploadUrl: `/api/dm/${convId}/files`
-		});
 
 		// ── 실시간 연결 ──
 		client = connectSocket(async (c) => {
@@ -197,7 +215,7 @@
 			c.subscribe('/user/queue/dm-deleted', f => onDeleted(JSON.parse(f.body)));
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
 			markRead();
-			el('content').focus();
+			el('content')?.focus();
 		});
 	</script>
 </body>

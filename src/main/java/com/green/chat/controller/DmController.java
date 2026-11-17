@@ -2,9 +2,11 @@ package com.green.chat.controller;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -29,10 +31,13 @@ public class DmController {
 
 	private final DmService dmService;
 	private final ConnectionTracker connectionTracker;
+	private final SimpMessageSendingOperations messagingTemplate;
 
-	public DmController(DmService dmService, ConnectionTracker connectionTracker) {
+	public DmController(DmService dmService, ConnectionTracker connectionTracker,
+			SimpMessageSendingOperations messagingTemplate) {
 		this.dmService = dmService;
 		this.connectionTracker = connectionTracker;
+		this.messagingTemplate = messagingTemplate;
 	}
 
 	// 새 1:1 대화: 대화할 사람 고르기 (대화 목록은 사이드바에 있음)
@@ -68,6 +73,7 @@ public class DmController {
 	@GetMapping("/dm/{id}")
 	public String room(@PathVariable Long id, @AuthenticationPrincipal LoginUser loginUser, Model model) {
 		return dmService.findForMember(id, loginUser.getId()).map(c -> {
+			dmService.reopen(c.getId(), loginUser.getId()); // 나갔던 대화를 주소로 열면 다시 목록에
 			Long partnerId = c.partnerOf(loginUser.getId());
 			String partnerNickname = dmService.partnerNickname(c, loginUser.getId());
 
@@ -78,8 +84,29 @@ public class DmController {
 			model.addAttribute("partnerInitial", Formats.initial(partnerNickname));
 			model.addAttribute("partnerTint", Formats.tint(partnerNickname));
 			model.addAttribute("partnerOnline", connectionTracker.onlineUserIds().contains(partnerId));
+			model.addAttribute("partnerGone", dmService.isPartnerGone(c, loginUser.getId())); // 탈퇴 → 입력칸 막기
 			return "dm-room";
 		}).orElse("redirect:/dm");
+	}
+
+	// 대화방 나가기 (사이드바 우클릭 메뉴, 대화 화면 [나가기] 버튼)
+	// 내 목록에서만 숨기고 상대에게는 알리지 않음. 상대가 다시 보내면 이전 대화와 함께 다시 보임
+	// back: 나가기 전에 보던 화면 (지금 그 대화를 보고 있었으면 홈으로)
+	@PostMapping("/dm/{id}/leave")
+	public String leave(@PathVariable Long id, @RequestParam(required = false) String back,
+			@AuthenticationPrincipal LoginUser loginUser) {
+		try {
+			dmService.leave(id, loginUser.getId());
+			// 내 다른 탭의 사이드바에서도 지우기 (상대에게는 보내지 않음)
+			messagingTemplate.convertAndSendToUser(loginUser.getUsername(), "/queue/dm-hidden",
+					Map.of("conversationId", id));
+		} catch (IllegalArgumentException e) {
+			// 남의 대화이거나 없는 대화 → 그냥 돌아감
+		}
+		// 우리 사이트 안의 주소만 (//다른사이트 같은 주소로 튕겨 나가지 않게)
+		boolean safe = back != null && back.matches("^/[A-Za-z0-9/_-]*$") && !back.startsWith("//")
+				&& !back.equals("/dm/" + id);
+		return "redirect:" + (safe ? back : "/rooms");
 	}
 
 	// 대화방으로 이동, 실패하면 사용자 고르기 화면에 오류 표시

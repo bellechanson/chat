@@ -71,7 +71,7 @@ public class RoomService {
 	public String ownerNickname(ChatRoom room) {
 		if (room.getOwnerId() == null)
 			return null;
-		return userRepository.findById(room.getOwnerId()).map(ChatUser::getNickname).orElse(null);
+		return userRepository.findById(room.getOwnerId()).map(ChatUser::getDisplayName).orElse(null);
 	}
 
 	// 방을 관리할 수 있는지: 방장 또는 관리자

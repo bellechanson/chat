@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.green.chat.entity.ChatUser;
+import com.green.chat.entity.Role;
 
 public interface ChatUserRepository extends JpaRepository<ChatUser, Long> {
 
@@ -25,18 +26,22 @@ public interface ChatUserRepository extends JpaRepository<ChatUser, Long> {
 
 	boolean existsByEmail(String email);
 
-	// 관리자: 전체 회원 (최신 가입순)
-	List<ChatUser> findAllByOrderByIdDesc();
+	// 관리자 수 (마지막 관리자는 탈퇴 못 하게)
+	long countByRole(Role role);
 
-	// DM 상대 목록용: 닉네임 가나다순
-	List<ChatUser> findAllByOrderByNicknameAsc();
+	// 관리자: 전체 회원 (최신 가입순, 탈퇴 회원 제외)
+	List<ChatUser> findAllByWithdrawnAtIsNullOrderByIdDesc();
+
+	// DM 상대 목록용: 닉네임 가나다순 (탈퇴 회원 제외)
+	List<ChatUser> findAllByWithdrawnAtIsNullOrderByNicknameAsc();
 
 	// 관리자: 아이디·닉네임·이메일 검색 (대소문자 무시)
 	@Query("""
 			select u from ChatUser u
-			 where lower(u.username) like lower(concat('%', :q, '%'))
+			 where u.withdrawnAt is null
+			   and (lower(u.username) like lower(concat('%', :q, '%'))
 			    or lower(u.nickname) like lower(concat('%', :q, '%'))
-			    or lower(u.email)    like lower(concat('%', :q, '%'))
+			    or lower(u.email)    like lower(concat('%', :q, '%')))
 			 order by u.id desc
 			""")
 	List<ChatUser> search(@Param("q") String q);

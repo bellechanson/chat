@@ -117,6 +117,11 @@
 			</ul>
 			<p class="side-empty" id="sideDmEmpty" th:classappend="${#lists.isEmpty(sidebar.dms)} ? '' : 'hidden'">
 				+ 버튼으로 대화를 시작하세요</p>
+
+			<!-- 대화방 나가기: sidebar.js의 leaveDm()이 주소를 채워서 보냄 (th:action이 CSRF 토큰을 자동으로 넣어 줌) -->
+			<form id="dmLeaveForm" th:action="@{/dm/0/leave}" method="post" hidden>
+				<input type="hidden" name="back">
+			</form>
 		</div>
 
 		<!-- 아래: 관리자 화면, 알림, 로그아웃 -->

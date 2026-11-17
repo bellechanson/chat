@@ -571,3 +571,16 @@
 	font-size: 13px;
 	color: var(--muted);
 }
+
+/* ───── 상대가 탈퇴한 1:1 대화: 입력칸 대신 안내 (dm-room.html) ───── */
+.composer-closed {
+	margin-top: 22px;
+	/* 입력 중 표시 자리만큼 띄워서 다른 화면과 높이 맞춤 */
+	padding: 14px 16px;
+	border: 1px dashed var(--line-strong);
+	border-radius: 12px;
+	background: var(--side);
+	font-size: 13px;
+	color: var(--muted);
+	text-align: center;
+}
