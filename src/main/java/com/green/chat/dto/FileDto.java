@@ -1,5 +1,7 @@
 package com.green.chat.dto;
 
+import java.util.List;
+
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.MessagePhoto;
 
@@ -11,9 +13,11 @@ public record FileDto(String name, long size, boolean image, String url, Long ph
 		return a == null ? null : new FileDto(a.getName(), a.getSize(), a.isImage(), url, null);
 	}
 
-	// 사진 묶음 속 한 장 (url = 메시지 파일 주소 + "/photos/사진번호")
-	public static FileDto photo(MessagePhoto p, String messageFileUrl) {
-		Attachment a = p.getAttachment();
-		return new FileDto(a.getName(), a.getSize(), true, messageFileUrl + "/photos/" + p.getId(), p.getId());
+	// 사진 묶음 → 화면용 목록 (사진마다 url = 메시지 파일 주소 + "/photos/사진번호") — 채팅방·DM 공통
+	public static List<FileDto> photos(String messageFileUrl, List<MessagePhoto> photos) {
+		return photos.stream().map(p -> {
+			Attachment a = p.getAttachment();
+			return new FileDto(a.getName(), a.getSize(), true, messageFileUrl + "/photos/" + p.getId(), p.getId());
+		}).toList();
 	}
 }

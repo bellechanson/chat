@@ -53,7 +53,7 @@ public class FileStorage {
 	private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp");
 
 	// 사진 묶음 하나에 넣을 수 있는 최대 장수
-	public static final int MAX_PHOTOS = 30;
+	private static final int MAX_PHOTOS = 30;
 
 	private final ImageThumbnails thumbnails;
 	private final Path root;
@@ -146,14 +146,9 @@ public class FileStorage {
 		return new Attachment(name, storedName, type, file.getSize());
 	}
 
-	// 내려주기: 사진은 브라우저에서 바로 보기, 나머지는 다운로드
-	public ResponseEntity<Resource> response(String folder, Attachment att) {
-		return response(folder, att, false);
-	}
-
 	/**
-	 * 내려주기 (thumb=true면 사진은 작은 미리보기로 — 말풍선·사진 묶음 격자용) 미리보기를 만들 필요가 없거나 못 만드는 사진(작은
-	 * 사진, gif, webp 등)은 원본
+	 * 내려주기: 사진은 브라우저에서 바로 보기, 나머지는 다운로드 thumb=true면 사진은 작은 미리보기로 (말풍선·사진 묶음 격자용, 만들
+	 * 필요가 없거나 못 만드는 사진은 원본)
 	 */
 	public ResponseEntity<Resource> response(String folder, Attachment att, boolean thumb) {
 		Path path = resolve(folder, att.getStoredName());

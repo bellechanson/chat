@@ -32,20 +32,16 @@ public record DmMessageDto(Long id, Long conversationId, Long senderId, // 내 �
 		String editedAt = (deleted || m.getEditedAt() == null) ? null : Formats.fullTime(m.getEditedAt());
 		return new DmMessageDto(m.getId(), convId, m.getSenderId(), senderNickname, deleted ? null : m.getContent(),
 				Formats.clock(m.getCreatedAt()), m.getReadAt() != null, deleted, file, Formats.day(m.getCreatedAt()),
-				editedAt, deleted ? List.of() : reactions, deleted ? List.of() : photoDtos(fileUrl, photos));
+				editedAt, deleted ? List.of() : reactions, deleted ? List.of() : FileDto.photos(fileUrl, photos));
 	}
 
 	// 사진 묶음 → 화면용 사진 목록 (한 장 삭제 신호에도 씀)
 	public static List<FileDto> photoDtos(Long conversationId, Long messageId, List<MessagePhoto> photos) {
-		return photoDtos(fileUrl(conversationId, messageId), photos);
+		return FileDto.photos(fileUrl(conversationId, messageId), photos);
 	}
 
 	// 이 메시지의 파일 주소: /api/dm/3/files/120 (사진 묶음은 뒤에 /photos/사진번호)
 	private static String fileUrl(Long conversationId, Long messageId) {
 		return "/api/dm/" + conversationId + "/files/" + messageId;
-	}
-
-	private static List<FileDto> photoDtos(String fileUrl, List<MessagePhoto> photos) {
-		return photos.stream().map(p -> FileDto.photo(p, fileUrl)).toList();
 	}
 }

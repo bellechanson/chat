@@ -35,7 +35,7 @@ public record ChatMessage(MessageType type, String sender, String content, Strin
 		String editedAt = (deleted || e.getEditedAt() == null) ? null : Formats.fullTime(e.getEditedAt());
 		return new ChatMessage(MessageType.TALK, e.getSender(), deleted ? null : e.getContent(),
 				Formats.clock(e.getCreatedAt()), e.getId(), deleted, file, Formats.day(e.getCreatedAt()), editedAt,
-				deleted ? List.of() : reactions, deleted ? List.of() : photoDtos(fileUrl, photos));
+				deleted ? List.of() : reactions, deleted ? List.of() : FileDto.photos(fileUrl, photos));
 	}
 
 	// "이 번호 메시지가 삭제됨" 신호
@@ -53,15 +53,11 @@ public record ChatMessage(MessageType type, String sender, String content, Strin
 	// "사진 묶음에서 한 장이 지워짐" 신호 (남은 사진 전체 → 화면에서 묶음을 다시 그림)
 	public static ChatMessage photosChanged(ChatMessageEntity e, List<MessagePhoto> photos) {
 		return new ChatMessage(MessageType.PHOTOS_CHANGED, e.getSender(), null, null, e.getId(), false, null, null,
-				null, List.of(), photoDtos(fileUrl(e), photos));
+				null, List.of(), FileDto.photos(fileUrl(e), photos));
 	}
 
 	// 이 메시지의 파일 주소: /api/rooms/1/files/351 (사진 묶음은 뒤에 /photos/사진번호)
 	private static String fileUrl(ChatMessageEntity e) {
 		return "/api/rooms/" + e.getRoom().getId() + "/files/" + e.getId();
-	}
-
-	private static List<FileDto> photoDtos(String fileUrl, List<MessagePhoto> photos) {
-		return photos.stream().map(p -> FileDto.photo(p, fileUrl)).toList();
 	}
 }

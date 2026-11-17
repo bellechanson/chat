@@ -168,7 +168,7 @@ function setupAttach({ button, input, textInput, uploadUrl, photoUrl, onUploadin
 
     let busy = false;
 
-    // 여러 개를 받아서 형식·크기 확인 → 하나씩 차례대로 전송
+    // 여러 개를 받아서 형식·크기 확인 → 사진은 묶음으로, 나머지 파일은 하나씩 차례대로 전송
     async function sendFiles(fileList) {
         const files = Array.from(fileList || []);
         if (!files.length) return;

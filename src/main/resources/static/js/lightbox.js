@@ -131,7 +131,6 @@ function showInLightbox(a) {
     lbCurrent = a;
     lbMsg = a.closest('.msg');
     lbKey = a.getAttribute('href');
-    const msg = lbMsg;
     const thumb = a.querySelector('img');
     const name = thumb ? thumb.alt : '';
 
@@ -141,8 +140,8 @@ function showInLightbox(a) {
     lb.img.alt = name;
     lb.download.href = a.href;
     lb.download.setAttribute('download', name || '사진');
-    lb.name.textContent = msg.querySelector('.msg-name')?.textContent || '';
-    lb.time.textContent = msg.querySelector('.msg-time')?.textContent || '';
+    lb.name.textContent = lbMsg.querySelector('.msg-name')?.textContent || '';
+    lb.time.textContent = lbMsg.querySelector('.msg-time')?.textContent || '';
     renderLightbox();
 }
 
