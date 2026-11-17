@@ -2,20 +2,12 @@
 <html lang="ko" xmlns:th="http://www.thymeleaf.org">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<meta name="theme-color" content="#D9480F">
-	<title th:text="${room.name} + ' - 실시간 채팅'">채팅</title>
-	<link rel="manifest" href="/manifest.json">
-	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<th:block th:replace="~{fragments/head :: common(${room.name})}"></th:block>
 	<link rel="stylesheet" th:href="@{/css/chat.css}">
-	<meta name="_csrf" th:content="${_csrf.token}">
-	<meta name="_csrf_header" th:content="${_csrf.headerName}">
-	<script th:src="@{/js/pwa.js}" defer></script>
-	<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
-	<script th:src="@{/js/socket.js}"></script>
-	<script th:src="@{/js/sidebar.js}"></script>
+	<th:block th:replace="~{fragments/head :: csrf}"></th:block>
+	<th:block th:replace="~{fragments/head :: realtime}"></th:block>
 	<script th:src="@{/js/messages.js}"></script>
+	<script th:src="@{/js/api.js}"></script>
 	<script th:src="@{/js/files.js}"></script>
 </head>
 
@@ -285,21 +277,16 @@
 			});
 		}
 
-		// [접속자] 펼치기/닫기 (바깥 클릭, Esc로 닫기)
+		// [접속자] 펼치기/닫기 (바깥 클릭, Esc로 닫기 — sidebar.js의 closeOnOutside)
 		function setUsersOpen(open) {
 			el('usersPop').classList.toggle('hidden', !open);
 			el('usersBtn').setAttribute('aria-expanded', open);
 		}
-		el('usersBtn').addEventListener('click', (e) => {
-			e.stopPropagation();
+		el('usersBtn').addEventListener('click', () => {
 			setUsersOpen(el('usersPop').classList.contains('hidden'));
 		});
-		document.addEventListener('click', (e) => {
-			if (!el('usersPop').contains(e.target)) setUsersOpen(false);
-		});
-		document.addEventListener('keydown', (e) => {
-			if (e.key === 'Escape') setUsersOpen(false);
-		});
+		closeOnOutside(el('usersPop'), () => setUsersOpen(false),
+			{ignore: t => el('usersBtn').contains(t)});   // [접속자] 버튼은 직접 열고 닫음
 
 		function kick(name) {
 			if (!confirm(`${name}님을 강퇴할까요?\n강퇴되면 이 방에 다시 들어올 수 없습니다.`)) return;

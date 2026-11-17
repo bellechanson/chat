@@ -137,8 +137,7 @@ public class DmService {
 
 	// 참여자일 때만 상대 로그인 아이디 (입력 중 신호 전달용)
 	public Optional<String> partnerUsername(Long conversationId, Long userId) {
-		return findForMember(conversationId, userId).flatMap(c -> userRepository.findById(c.partnerOf(userId)))
-				.map(ChatUser::getUsername);
+		return findForMember(conversationId, userId).map(c -> partnerUsernameOf(c, userId));
 	}
 
 	// ── 대화 목록 (메시지가 하나라도 있고, 내가 나가지 않은 대화만) ──
@@ -224,16 +223,14 @@ public class DmService {
 		DmMessage saved = messageRepository.save(message);
 		c.touch(); // 목록 정렬용 시각 갱신 + 나갔던 사람에게 다시 보이게 (변경 감지로 UPDATE)
 
-		String partnerUsername = userRepository.findById(c.partnerOf(senderId)).map(ChatUser::getUsername).orElse(null);
-		return new Sent(DmMessageDto.from(saved, senderNickname), partnerUsername);
+		return new Sent(DmMessageDto.from(saved, senderNickname), partnerUsernameOf(c, senderId));
 	}
 
 	// 내려받을 파일 (참여자만, 이 대화의 삭제 안 된 파일 메시지만)
 	public Optional<Attachment> attachment(Long conversationId, Long messageId, Long userId) {
 		if (findForMember(conversationId, userId).isEmpty())
 			return Optional.empty();
-		return messageRepository.findById(messageId).filter(m -> m.getConversation().getId().equals(conversationId))
-				.filter(m -> !m.isDeleted()).map(DmMessage::getAttachment);
+		return findInConversation(conversationId, messageId).filter(m -> !m.isDeleted()).map(DmMessage::getAttachment);
 	}
 
 	// ── 읽음 처리: 새로 읽은 게 있으면 상대 로그인 아이디 반환 ──
@@ -247,21 +244,19 @@ public class DmService {
 		if (updated == 0)
 			return Optional.empty(); // 이미 다 읽음 → 알릴 필요 없음
 
-		return userRepository.findById(found.get().partnerOf(userId)).map(ChatUser::getUsername);
+		return Optional.ofNullable(partnerUsernameOf(found.get(), userId));
 	}
 
 	// ── 메시지 삭제 (내 메시지만): 알려 줄 상대 로그인 아이디 반환 ──
 	@Transactional
 	public String delete(Long conversationId, Long messageId, Long userId) {
 		DmConversation c = member(conversationId, userId);
-		DmMessage m = messageRepository.findById(messageId)
-				.filter(msg -> msg.getConversation().getId().equals(conversationId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		DmMessage m = messageIn(conversationId, messageId);
 		if (!m.getSenderId().equals(userId)) {
 			throw new IllegalArgumentException("내 메시지만 삭제할 수 있습니다.");
 		}
 		m.delete(); // 변경 감지로 UPDATE
-		return userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
+		return partnerUsernameOf(c, userId);
 	}
 
 	// ── 메시지 수정 (내 글 메시지만, 사진·파일 메시지는 수정 불가) ──
@@ -270,9 +265,7 @@ public class DmService {
 		DmConversation c = member(conversationId, userId);
 		checkPartner(c, userId); // 상대가 탈퇴했으면 수정도 막음 (대화가 끝난 상태)
 
-		DmMessage m = messageRepository.findById(messageId)
-				.filter(msg -> msg.getConversation().getId().equals(conversationId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		DmMessage m = messageIn(conversationId, messageId);
 		if (!m.getSenderId().equals(userId)) {
 			throw new IllegalArgumentException("내 메시지만 수정할 수 있습니다.");
 		}
@@ -294,8 +287,7 @@ public class DmService {
 		boolean last = !messageRepository.existsByConversationIdAndIdGreaterThan(conversationId, messageId);
 		DmEditedEvent event = new DmEditedEvent(conversationId, messageId, text, Formats.fullTime(m.getEditedAt()),
 				last);
-		String partnerUsername = userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
-		return new Edited(event, partnerUsername);
+		return new Edited(event, partnerUsernameOf(c, userId));
 	}
 
 	// ── 이모지 반응 (상대·내 메시지 모두, 사진·파일 포함): 같은 걸 다시 누르면 취소, 다른 걸 누르면 바뀜 ──
@@ -304,16 +296,13 @@ public class DmService {
 		DmConversation c = member(conversationId, userId);
 		checkPartner(c, userId); // 상대가 탈퇴했으면 막음 (대화가 끝난 상태)
 
-		DmMessage m = messageRepository.findById(messageId)
-				.filter(msg -> msg.getConversation().getId().equals(conversationId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		DmMessage m = messageIn(conversationId, messageId);
 		if (m.isDeleted()) {
 			throw new IllegalArgumentException("삭제된 메시지에는 반응할 수 없습니다.");
 		}
 
 		List<ReactionDto> reactions = reactionService.toggle(MessageReaction.DM, messageId, userId, emoji);
-		String partnerUsername = userRepository.findById(c.partnerOf(userId)).map(ChatUser::getUsername).orElse(null);
-		return new Reacted(new ReactionEvent(conversationId, messageId, reactions), partnerUsername);
+		return new Reacted(new ReactionEvent(conversationId, messageId, reactions), partnerUsernameOf(c, userId));
 	}
 
 	// 탈퇴한 사람에게는 보낼 수 없음
@@ -321,6 +310,24 @@ public class DmService {
 		if (isPartnerGone(c, senderId)) {
 			throw new IllegalArgumentException("탈퇴한 사용자에게는 메시지를 보낼 수 없습니다.");
 		}
+	}
+
+	// ── 여러 기능이 같이 쓰는 도우미 ──
+
+	// 이 대화의 메시지 (다른 대화 번호로 남의 메시지를 건드리지 못하게)
+	private Optional<DmMessage> findInConversation(Long conversationId, Long messageId) {
+		return messageRepository.findById(messageId).filter(m -> m.getConversation().getId().equals(conversationId));
+	}
+
+	// 이 대화의 메시지, 없으면 예외 (삭제·수정·반응)
+	private DmMessage messageIn(Long conversationId, Long messageId) {
+		return findInConversation(conversationId, messageId)
+				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+	}
+
+	// 상대 로그인 아이디 (실시간 전송 대상, DB에서 지운 회원이면 null)
+	private String partnerUsernameOf(DmConversation c, Long myId) {
+		return userRepository.findById(c.partnerOf(myId)).map(ChatUser::getUsername).orElse(null);
 	}
 
 	// 참여자가 아니면 예외

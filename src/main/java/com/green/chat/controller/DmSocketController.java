@@ -89,11 +89,7 @@ public class DmSocketController {
 
 		try {
 			String partner = dmService.delete(conversationId, request.id(), user.getId());
-			DmDeletedEvent event = new DmDeletedEvent(conversationId, request.id());
-			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-deleted", event);
-			if (partner != null) {
-				messagingTemplate.convertAndSendToUser(partner, "/queue/dm-deleted", event);
-			}
+			toBoth(principal.getName(), partner, "/queue/dm-deleted", new DmDeletedEvent(conversationId, request.id()));
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 삭제 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
 		}
@@ -110,10 +106,7 @@ public class DmSocketController {
 
 		try {
 			DmService.Edited edited = dmService.edit(conversationId, request.id(), user.getId(), request.content());
-			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-edited", edited.event());
-			if (edited.partnerUsername() != null) {
-				messagingTemplate.convertAndSendToUser(edited.partnerUsername(), "/queue/dm-edited", edited.event());
-			}
+			toBoth(principal.getName(), edited.partnerUsername(), "/queue/dm-edited", edited.event());
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 수정 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
 		}
@@ -128,13 +121,17 @@ public class DmSocketController {
 
 		try {
 			DmService.Reacted reacted = dmService.react(conversationId, request.id(), user.getId(), request.emoji());
-			messagingTemplate.convertAndSendToUser(principal.getName(), "/queue/dm-reactions", reacted.event());
-			if (reacted.partnerUsername() != null) {
-				messagingTemplate.convertAndSendToUser(reacted.partnerUsername(), "/queue/dm-reactions",
-						reacted.event());
-			}
+			toBoth(principal.getName(), reacted.partnerUsername(), "/queue/dm-reactions", reacted.event());
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 반응 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
+		}
+	}
+
+	// 나(다른 탭 포함)와 상대 화면 모두에 보내기 (상대가 DB에서 지워진 회원이면 나에게만)
+	private void toBoth(String myUsername, String partnerUsername, String destination, Object payload) {
+		messagingTemplate.convertAndSendToUser(myUsername, destination, payload);
+		if (partnerUsername != null) {
+			messagingTemplate.convertAndSendToUser(partnerUsername, destination, payload);
 		}
 	}
 }

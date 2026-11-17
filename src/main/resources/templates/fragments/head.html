@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+	<!--
+		모든 화면 <head>의 공통 부분 (화면마다 다른 CSS·JS는 각 화면에서 이 조각 다음에 붙임)
+		  기본:     <th:block th:replace="~{fragments/head :: common('로그인')}"></th:block>
+		  CSRF:     <th:block th:replace="~{fragments/head :: csrf}"></th:block>      (fetch로 POST하는 화면)
+		  실시간:   <th:block th:replace="~{fragments/head :: realtime}"></th:block>  (사이드바가 있는 로그인 후 화면)
+	-->
+
+	<!-- 기본: 글자·화면 크기·색, 제목("○○ - 실시간 채팅", 비우면 "실시간 채팅"), 앱 설치(PWA), 공통 CSS -->
+	<th:block th:fragment="common(title)">
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="theme-color" content="#D9480F">
+		<title th:text="${#strings.isEmpty(title)} ? '실시간 채팅' : ${title} + ' - 실시간 채팅'">실시간 채팅</title>
+		<link rel="manifest" href="/manifest.json">
+		<link rel="stylesheet" th:href="@{/css/base.css}">
+		<script th:src="@{/js/pwa.js}" defer></script>
+	</th:block>
+
+	<!-- CSRF 토큰 (api.js의 csrfHeaders가 읽음) -->
+	<th:block th:fragment="csrf">
+		<meta name="_csrf" th:content="${_csrf.token}">
+		<meta name="_csrf_header" th:content="${_csrf.headerName}">
+	</th:block>
+
+	<!-- 실시간 연결 + 사이드바 (socket.js → sidebar.js 순서) -->
+	<th:block th:fragment="realtime">
+		<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+		<script th:src="@{/js/socket.js}"></script>
+		<script th:src="@{/js/sidebar.js}"></script>
+	</th:block>
+</head>
+
+</html>

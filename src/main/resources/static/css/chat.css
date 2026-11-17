@@ -236,24 +236,38 @@
 	font-style: italic;
 }
 
-/* 마우스를 올리면 오른쪽에 [삭제] */
-.del-btn {
+/* 마우스를 올리면 오른쪽 끝에 [반응] [수정] [삭제] (messages.js의 toolButton)
+   버튼을 새로 붙일 때는 .msg-tool 클래스만 주면 같은 모양이 됨 */
+.msg-tools {
 	margin-left: auto;
+	display: flex;
+	visibility: hidden;
+}
+
+.msg:hover .msg-tools,
+.msg-tools:focus-within {
+	visibility: visible;
+}
+
+/* 고치는 중에는 버튼 숨김 */
+.msg.editing .msg-tools {
+	display: none;
+}
+
+.msg-tool {
 	padding: 0 6px;
 	border: 0;
 	background: transparent;
 	color: var(--muted);
 	font-size: 12px;
 	cursor: pointer;
-	visibility: hidden;
 }
 
-.msg:hover .del-btn,
-.del-btn:focus-visible {
-	visibility: visible;
+.msg-tool:hover {
+	color: var(--accent-ink);
 }
 
-.del-btn:hover {
+.msg-tool.danger:hover {
 	color: var(--danger);
 }
 
@@ -587,37 +601,6 @@
 
 
 /* ───── 메시지 수정 (messages.js의 startEdit, markEdited) ───── */
-/* 마우스를 올리면 [수정] [삭제] — 수정 버튼이 오른쪽 끝으로 밀어 주고, 삭제는 바로 옆에 */
-.edit-btn {
-	margin-left: auto;
-	padding: 0 6px;
-	border: 0;
-	background: transparent;
-	color: var(--muted);
-	font-size: 12px;
-	cursor: pointer;
-	visibility: hidden;
-}
-
-.edit-btn+.del-btn {
-	margin-left: 0;
-}
-
-.msg:hover .edit-btn,
-.edit-btn:focus-visible {
-	visibility: visible;
-}
-
-.edit-btn:hover {
-	color: var(--accent-ink);
-}
-
-/* 고치는 중에는 [수정] [삭제] 숨김 */
-.msg.editing .edit-btn,
-.msg.editing .del-btn {
-	display: none;
-}
-
 /* 시각 옆 "(수정됨)" */
 .msg-edited {
 	font-size: 12px;
@@ -680,36 +663,6 @@
 
 
 /* ───── 이모지 반응 (messages.js의 setReactions, openReactPicker) ───── */
-/* 마우스를 올리면 [반응] [수정] [삭제] — 맨 앞 버튼이 오른쪽 끝으로 밀어 줌 */
-.react-btn {
-	margin-left: auto;
-	padding: 0 6px;
-	border: 0;
-	background: transparent;
-	color: var(--muted);
-	font-size: 12px;
-	cursor: pointer;
-	visibility: hidden;
-}
-
-.react-btn+.edit-btn,
-.react-btn+.del-btn {
-	margin-left: 0;
-}
-
-.msg:hover .react-btn,
-.react-btn:focus-visible {
-	visibility: visible;
-}
-
-.react-btn:hover {
-	color: var(--accent-ink);
-}
-
-.msg.editing .react-btn {
-	display: none;
-}
-
 /* 메시지 아래 반응 칩: 👍 3 */
 .reactions {
 	display: flex;

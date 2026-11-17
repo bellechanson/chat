@@ -117,6 +117,25 @@ function leaveDm(convId, partnerName) {
     form.submit();
 }
 
+// ───── 작은 팝업 닫기 공통 (우클릭 메뉴, 반응 고르는 창, 채팅방 접속자 목록) ─────
+// 팝업 밖을 누르거나 Esc를 누르면 close()
+//   ignore  : (누른 요소) → true면 닫지 않음 (팝업을 여는 버튼은 그 버튼이 직접 열고 닫게)
+//   floating: true면 스크롤·창 크기 변경·창 전환 때도 닫음 (화면 좌표로 띄운 창이 엉뚱한 곳에 남지 않게)
+function closeOnOutside(popup, close, { ignore = null, floating = false } = {}) {
+    document.addEventListener('mousedown', (e) => {
+        if (popup.contains(e.target) || (ignore && ignore(e.target))) return;
+        close();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') close();
+    });
+    if (floating) {
+        window.addEventListener('resize', close);
+        window.addEventListener('blur', close);
+        document.addEventListener('scroll', close, true);
+    }
+}
+
 // 우클릭 메뉴 (한 개를 만들어 두고 위치만 옮겨 씀)
 let sideMenu = null;
 
@@ -130,9 +149,7 @@ function openSideMenu(x, y, items) {
         sideMenu.className = 'ctx-menu hidden';
         sideMenu.setAttribute('role', 'menu');
         document.body.appendChild(sideMenu);
-        sideMenu.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeSideMenu();
-        });
+        closeOnOutside(sideMenu, closeSideMenu, { floating: true });   // 메뉴 밖 클릭, Esc, 스크롤·창 크기 변경·창 전환
     }
     sideMenu.replaceChildren(...items.map(item => {
         const b = document.createElement('button');
@@ -247,13 +264,6 @@ document.addEventListener('DOMContentLoaded', () => {
             { label: '대화방 나가기', danger: true, action: () => leaveDm(li.dataset.convId, li.dataset.name) }
         ]);
     });
-    // 메뉴 밖을 누르거나, 스크롤·창 크기 변경·창 전환 때 닫기
-    document.addEventListener('mousedown', (e) => {
-        if (sideMenu && !sideMenu.contains(e.target)) closeSideMenu();
-    });
-    window.addEventListener('resize', closeSideMenu);
-    window.addEventListener('blur', closeSideMenu);
-    document.addEventListener('scroll', closeSideMenu, true);
 
     // 찾기: 이름에 글자가 들어간 방·대화만 보이기
     document.getElementById('sideFind')?.addEventListener('input', (e) => {

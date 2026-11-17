@@ -1,4 +1,5 @@
 // ───────── 채팅방 · DM 대화방 공통 ─────────
+// sidebar.js(closeOnOutside, tintOf, initialOf) · files.js(fileElement) 와 함께 불러옴
 
 // ───── 날짜 구분선 ─────
 // "2026-11-17" → "2026년 11월 17일 화요일"
@@ -146,7 +147,7 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
         keepBottom() {
             if (stickToBottom) scrollToBottom();
         },
-        // 메시지 번호로 화면 요소 찾기 (삭제 표시용)
+        // 메시지 번호로 화면 요소 찾기 (삭제·수정·반응을 그 메시지에 반영할 때)
         find(id) {
             return box.querySelector(`.msg[data-id="${id}"]`);
         }
@@ -283,15 +284,10 @@ function openReactPicker(button, onPick) {
         reactPicker.setAttribute('role', 'menu');
         reactPicker.setAttribute('aria-label', '반응 고르기');
         document.body.appendChild(reactPicker);
-        // 창 밖을 누르거나 Esc, 스크롤, 창 크기 변경이면 닫기
-        document.addEventListener('mousedown', (e) => {
-            if (!reactPicker.contains(e.target) && !e.target.closest('.react-btn')) closeReactPicker();
-        });
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeReactPicker();
-        });
-        window.addEventListener('resize', closeReactPicker);
-        document.addEventListener('scroll', closeReactPicker, true);
+        // 창 밖 클릭, Esc, 스크롤·창 크기 변경·창 전환이면 닫기 (sidebar.js의 closeOnOutside)
+        //   열어 준 [반응] 버튼은 빼고 — 그 버튼은 다시 누르면 닫히도록 아래에서 처리
+        closeOnOutside(reactPicker, closeReactPicker,
+            { ignore: t => t === reactPicker._owner, floating: true });
     }
     // 같은 버튼을 다시 누르면 닫기
     if (reactPicker._owner === button && !reactPicker.classList.contains('hidden')) {
@@ -326,25 +322,20 @@ function openReactPicker(button, onPick) {
     reactPicker.querySelector('button').focus();
 }
 
-function reactButton(onClick) {
+// ───── 메시지 오른쪽 버튼 ([반응] [수정] [삭제] …) ─────
+// 모두 같은 모양(.msg-tool), 마우스를 올리면 보임 — 새 버튼도 이 함수로 만들면 CSS 추가가 필요 없음
+//   onClick(btn): 누른 버튼을 넘겨 줌 (반응 고르는 창 위치 잡기용)
+function toolButton(label, title, onClick, danger = false) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'react-btn';
-    btn.textContent = '반응';
-    btn.title = '반응 달기';
+    btn.className = 'msg-tool' + (danger ? ' danger' : '');
+    btn.textContent = label;
+    btn.title = title;
     btn.onclick = () => onClick(btn);
     return btn;
 }
 
 // ───── 메시지 삭제 ─────
-function deleteButton(onClick) {
-    const btn = document.createElement('button');
-    btn.className = 'del-btn';
-    btn.textContent = '삭제';
-    btn.onclick = onClick;
-    return btn;
-}
-
 // 삭제 표시 (수정하던 중이었으면 수정창도 같이 닫힘 — 말풍선 내용을 통째로 바꾸므로)
 //   반응 칩·반응 버튼도 없앰 (고르는 창이 이 메시지 것이면 닫음)
 function markDeleted(div) {
@@ -355,18 +346,10 @@ function markDeleted(div) {
     bubble.textContent = '삭제된 메시지입니다';
     if (reactPicker && reactPicker._owner && div.contains(reactPicker._owner)) closeReactPicker();
     div._onReact = null;
-    div.querySelectorAll('.del-btn, .edit-btn, .react-btn, .msg-edited, .reactions').forEach(b => b.remove());
+    div.querySelectorAll('.msg-tools, .msg-edited, .reactions').forEach(el => el.remove());
 }
 
 // ───── 메시지 수정 ─────
-function editButton(onClick) {
-    const btn = document.createElement('button');
-    btn.className = 'edit-btn';
-    btn.textContent = '수정';
-    btn.onclick = onClick;
-    return btn;
-}
-
 // 시각 옆 "(수정됨)" 표시 (마우스를 올리면 수정 시각)
 function setEditedMark(div, editedAt) {
     const head = div.querySelector('.msg-head');
@@ -459,7 +442,7 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
     reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, onImageLoad }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
-    if (id) div.dataset.id = id;   // 삭제할 때 찾기용
+    if (id) div.dataset.id = id;   // 삭제·수정·반응 신호가 오면 이 번호로 찾음
 
     const avatar = document.createElement('span');
     avatar.className = 'avatar ' + (mine ? 'avatar-accent' : 'av-' + tintOf(name));
@@ -502,13 +485,17 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
         return div;
     }
     if (editedAt) setEditedMark(div, editedAt);
-    // [반응]은 글·사진·파일 모두에
     div._myId = myId;
     div._onReact = onReact;
-    if (onReact) head.appendChild(reactButton(btn => openReactPicker(btn, onReact)));
-    // 글 메시지에만 [수정] (사진·파일은 고칠 내용이 없음)
-    if (onEdit && !file) head.appendChild(editButton(() => startEdit(div, onEdit)));
-    if (onDelete) head.appendChild(deleteButton(onDelete));
+
+    // 오른쪽 버튼 묶음: [반응](글·사진·파일 모두) [수정](글 메시지만) [삭제]
+    const tools = document.createElement('span');
+    tools.className = 'msg-tools';
+    if (onReact) tools.appendChild(toolButton('반응', '반응 달기', btn => openReactPicker(btn, onReact)));
+    if (onEdit && !file) tools.appendChild(toolButton('수정', '메시지 수정', () => startEdit(div, onEdit)));
+    if (onDelete) tools.appendChild(toolButton('삭제', '메시지 삭제', () => onDelete(), true));
+    if (tools.children.length > 0) head.appendChild(tools);
+
     setReactions(div, reactions);
     return div;
 }

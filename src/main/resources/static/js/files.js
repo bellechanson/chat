@@ -1,4 +1,5 @@
 // ───────── 사진·파일 보내기 (채팅방, DM 공통) ─────────
+// api.js(csrfHeaders) 다음에 불러와야 함
 let uploadMaxMb = 50;                  // 파일 하나 최대(MB) — setupAttach가 서버 설정값(data-max-mb)으로 바꿈
 const maxUploadBytes = () => uploadMaxMb * 1024 * 1024;
 const MAX_FILES_AT_ONCE = 10;          // 한 번에 보낼 수 있는 개수 (끌어다 놓기, 여러 개 고르기)
@@ -12,12 +13,8 @@ async function uploadFile(url, file) {
     const form = new FormData();
     form.append('file', file);
 
-    const token = document.querySelector('meta[name="_csrf"]')?.content;
-    const header = document.querySelector('meta[name="_csrf_header"]')?.content;
-    const headers = token && header ? { [header]: token } : {};
-
     try {
-        const res = await fetch(url, { method: 'POST', headers, body: form });
+        const res = await fetch(url, { method: 'POST', headers: csrfHeaders(), body: form });   // api.js
         if (res.ok) return true;
         const data = await res.json().catch(() => null);
         alert(data?.message || (res.status === 413 ? `${uploadMaxMb}MB 이하 파일만 보낼 수 있어요.` : '파일을 보내지 못했습니다.'));

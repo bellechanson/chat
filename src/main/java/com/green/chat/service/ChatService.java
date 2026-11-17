@@ -79,8 +79,7 @@ public class ChatService {
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)
 	public Optional<Attachment> attachment(Long roomId, Long messageId) {
-		return messageRepository.findById(messageId).filter(m -> m.getRoom().getId().equals(roomId))
-				.filter(m -> !m.isDeleted()).map(ChatMessageEntity::getAttachment);
+		return findInRoom(roomId, messageId).filter(m -> !m.isDeleted()).map(ChatMessageEntity::getAttachment);
 	}
 
 	/**
@@ -90,8 +89,7 @@ public class ChatService {
 	 */
 	@Transactional
 	public void delete(Long roomId, Long messageId, String nickname, boolean canManage) {
-		ChatMessageEntity m = messageRepository.findById(messageId).filter(msg -> msg.getRoom().getId().equals(roomId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		ChatMessageEntity m = messageIn(roomId, messageId);
 		if (!canManage && !m.getSender().equals(nickname)) {
 			throw new IllegalArgumentException("내 메시지만 삭제할 수 있습니다.");
 		}
@@ -105,8 +103,7 @@ public class ChatService {
 	 */
 	@Transactional
 	public ChatMessage edit(Long roomId, Long messageId, String nickname, String content) {
-		ChatMessageEntity m = messageRepository.findById(messageId).filter(msg -> msg.getRoom().getId().equals(roomId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		ChatMessageEntity m = messageIn(roomId, messageId);
 		if (!m.getSender().equals(nickname)) {
 			throw new IllegalArgumentException("내 메시지만 수정할 수 있습니다.");
 		}
@@ -133,12 +130,23 @@ public class ChatService {
 	 */
 	@Transactional
 	public ReactionEvent react(Long roomId, Long messageId, Long userId, String emoji) {
-		ChatMessageEntity m = messageRepository.findById(messageId).filter(msg -> msg.getRoom().getId().equals(roomId))
-				.orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
+		ChatMessageEntity m = messageIn(roomId, messageId);
 		if (m.isDeleted()) {
 			throw new IllegalArgumentException("삭제된 메시지에는 반응할 수 없습니다.");
 		}
 		List<ReactionDto> reactions = reactionService.toggle(MessageReaction.ROOM, messageId, userId, emoji);
 		return new ReactionEvent(null, messageId, reactions);
+	}
+
+	// ── 여러 기능이 같이 쓰는 도우미 ──
+
+	// 이 방의 메시지 (다른 방 번호로 남의 메시지를 건드리지 못하게)
+	private Optional<ChatMessageEntity> findInRoom(Long roomId, Long messageId) {
+		return messageRepository.findById(messageId).filter(m -> m.getRoom().getId().equals(roomId));
+	}
+
+	// 이 방의 메시지, 없으면 예외 (삭제·수정·반응)
+	private ChatMessageEntity messageIn(Long roomId, Long messageId) {
+		return findInRoom(roomId, messageId).orElseThrow(() -> new IllegalArgumentException("존재하지 않는 메시지입니다."));
 	}
 }

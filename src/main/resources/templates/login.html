@@ -2,14 +2,8 @@
 <html lang="ko" xmlns:th="http://www.thymeleaf.org">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<meta name="theme-color" content="#D9480F">
-	<title>로그인 - 실시간 채팅</title>
-	<link rel="manifest" href="/manifest.json">
-	<link rel="stylesheet" th:href="@{/css/base.css}">
+	<th:block th:replace="~{fragments/head :: common('로그인')}"></th:block>
 	<link rel="stylesheet" th:href="@{/css/auth.css}">
-	<script th:src="@{/js/pwa.js}" defer></script>
 </head>
 
 <body class="auth-page">
