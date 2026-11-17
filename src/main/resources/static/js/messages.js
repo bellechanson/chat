@@ -153,6 +153,67 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
     };
 }
 
+// ───── 링크 자동 연결 ─────
+// http://, https://, www. 로 시작하는 주소만 링크로 (그 외 글자는 그대로 — innerHTML을 쓰지 않아 안전)
+const LINK_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+const LINK_TRAIL_RE = /[.,!?;:'"\]}>…。、]+$/;   // 주소 끝에 붙은 문장부호는 링크에서 뺌
+
+// 글 → [{text}, {url, href}, ...] 조각
+function splitLinks(text) {
+    const parts = [];
+    let last = 0;
+    for (const m of text.matchAll(LINK_RE)) {
+        let url = m[0];
+        // "https://naver.com." → 마침표 빼기, 닫는 괄호는 여는 괄호가 모자랄 때만 빼기
+        //   "(https://a.com)" → 괄호 빼기 / "https://ko.wikipedia.org/wiki/A_(B)" → 그대로
+        for (;;) {
+            const t = url.match(LINK_TRAIL_RE);
+            if (t) {
+                url = url.slice(0, -t[0].length);
+                continue;
+            }
+            if (url.endsWith(')') && (url.split('(').length < url.split(')').length)) {
+                url = url.slice(0, -1);
+                continue;
+            }
+            break;
+        }
+        const href = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+        let ok = false;
+        try {
+            const u = new URL(href);
+            ok = (u.protocol === 'http:' || u.protocol === 'https:') && u.hostname !== '';   // localhost:8081도 링크
+        } catch (e) { /* 주소 모양이 아니면 글자로 둠 */ }
+        if (!ok) continue;
+
+        if (m.index > last) parts.push({ text: text.slice(last, m.index) });
+        parts.push({ url, href });
+        last = m.index + url.length;
+    }
+    if (last < text.length) parts.push({ text: text.slice(last) });
+    return parts;
+}
+
+// 요소 안을 글 + 링크로 채우기 (새 메시지, 수정된 메시지, 수정 취소 모두 이걸로 그림)
+//   링크는 새 탭에서 열리고(noopener), 연 사이트가 채팅 창을 건드리지 못함
+function fillWithLinks(el, text) {
+    el.replaceChildren();
+    if (!text) return;
+    splitLinks(text).forEach(part => {
+        if (!part.url) {
+            el.append(part.text);
+            return;
+        }
+        const a = document.createElement('a');
+        a.className = 'msg-link';
+        a.href = part.href;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = part.url;   // 적은 그대로 보여 줌 (www. 앞에 https://를 붙이지 않음)
+        el.append(a);
+    });
+}
+
 // ───── 메시지 삭제 ─────
 function deleteButton(onClick) {
     const btn = document.createElement('button');
@@ -199,7 +260,7 @@ function setEditedMark(div, editedAt) {
 function markEdited(div, content, editedAt) {
     if (div.classList.contains('deleted')) return;
     div.classList.remove('editing');
-    div.querySelector('.bubble').textContent = content;
+    fillWithLinks(div.querySelector('.bubble'), content);   // 새 내용도 링크로
     setEditedMark(div, editedAt);
 }
 
@@ -208,7 +269,7 @@ function markEdited(div, content, editedAt) {
 function startEdit(div, save) {
     if (div.classList.contains('editing') || div.classList.contains('deleted')) return;
     const bubble = div.querySelector('.bubble');
-    const original = bubble.textContent;
+    const original = bubble.textContent;   // 링크가 있어도 글자 그대로 (적은 주소 그대로 입력칸에)
     div.classList.add('editing');
 
     const input = document.createElement('input');
@@ -238,7 +299,7 @@ function startEdit(div, save) {
     function close(text) {
         if (!div.classList.contains('editing')) return;   // 이미 삭제·수정 신호로 닫힘
         div.classList.remove('editing');
-        bubble.textContent = text;
+        fillWithLinks(bubble, text);
     }
     function done() {
         const text = input.value.trim();
@@ -303,7 +364,7 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
         bubble.classList.add(file.image ? 'has-img' : 'has-file');
         bubble.appendChild(fileElement(file, onImageLoad));
     } else {
-        bubble.textContent = content;
+        fillWithLinks(bubble, content);   // 주소는 누를 수 있는 링크로
     }
 
     main.append(head, bubble);
