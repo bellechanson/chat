@@ -235,6 +235,7 @@ function setReactions(div, reactions) {
     const myId = div._myId;
     let bar = div.querySelector('.reactions');
     const list = (reactions || []).filter(r => REACTION_INFO[r.emoji] && r.userIds.length > 0);
+    div._reactions = list;          // 사진 크게 보기 화면이 같은 반응을 그릴 때 씀 (lightbox.js)
     if (list.length === 0) {
         bar?.remove();
         return;
@@ -244,28 +245,32 @@ function setReactions(div, reactions) {
         bar.className = 'reactions';
         div.querySelector('.msg-main').appendChild(bar);
     }
-    bar.replaceChildren(...list.map(r => {
-        const info = REACTION_INFO[r.emoji];
-        const mine = r.userIds.some(id => String(id) === String(myId));
-        const chip = document.createElement(onReact ? 'button' : 'span');
-        chip.className = 'react-chip' + (mine ? ' mine' : '');
-        // 누가 눌렀는지 (마우스를 올리면 보임, 실시간으로 함께 바뀜)
-        chip.title = `${r.names.join(', ')}님이 ${info.emoji} 반응`
-            + (onReact ? (mine ? ' · 누르면 취소' : ' · 누르면 나도 이 반응') : '');
-        if (onReact) {
-            chip.type = 'button';
-            chip.setAttribute('aria-pressed', mine);
-            chip.onclick = () => onReact(r.emoji);
-        }
-        const e = document.createElement('span');
-        e.className = 'e';
-        e.textContent = info.emoji;
-        const n = document.createElement('span');
-        n.className = 'n';
-        n.textContent = r.userIds.length;
-        chip.append(e, n);
-        return chip;
-    }));
+    bar.replaceChildren(...list.map(r => reactionChip(r, myId, onReact)));
+}
+
+// 반응 칩 하나: 👍 3 (메시지 아래, 사진 크게 보기 화면 모두 이걸로 그림)
+//   onReact가 없으면 보기만 (눌러지지 않는 칩)
+function reactionChip(r, myId, onReact) {
+    const info = REACTION_INFO[r.emoji];
+    const mine = r.userIds.some(id => String(id) === String(myId));
+    const chip = document.createElement(onReact ? 'button' : 'span');
+    chip.className = 'react-chip' + (mine ? ' mine' : '');
+    // 누가 눌렀는지 (마우스를 올리면 보임, 실시간으로 함께 바뀜)
+    chip.title = `${r.names.join(', ')}님이 ${info.emoji} 반응`
+        + (onReact ? (mine ? ' · 누르면 취소' : ' · 누르면 나도 이 반응') : '');
+    if (onReact) {
+        chip.type = 'button';
+        chip.setAttribute('aria-pressed', mine);
+        chip.onclick = () => onReact(r.emoji);
+    }
+    const e = document.createElement('span');
+    e.className = 'e';
+    e.textContent = info.emoji;
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = r.userIds.length;
+    chip.append(e, n);
+    return chip;
 }
 
 // 이모지 고르는 작은 창 (하나를 만들어 두고 위치만 옮겨 씀)
