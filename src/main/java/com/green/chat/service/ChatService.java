@@ -17,6 +17,7 @@ import com.green.chat.dto.ReactionEvent;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatMessageEntity;
 import com.green.chat.entity.ChatRoom;
+import com.green.chat.entity.MessagePhoto;
 import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatMessageRepository;
 import com.green.chat.repository.ChatRoomRepository;
@@ -31,13 +32,15 @@ public class ChatService {
 	private final ChatMessageRepository messageRepository;
 	private final FileStorage fileStorage;
 	private final ReactionService reactionService;
+	private final PhotoService photoService;
 
 	public ChatService(ChatRoomRepository roomRepository, ChatMessageRepository messageRepository,
-			FileStorage fileStorage, ReactionService reactionService) {
+			FileStorage fileStorage, ReactionService reactionService, PhotoService photoService) {
 		this.roomRepository = roomRepository;
 		this.messageRepository = messageRepository;
 		this.fileStorage = fileStorage;
 		this.reactionService = reactionService;
+		this.photoService = photoService;
 	}
 
 	@Transactional
@@ -56,6 +59,16 @@ public class ChatService {
 		return ChatMessage.from(saved);
 	}
 
+	// 사진 묶음 메시지: 사진들 저장 → 메시지 하나(내용 "사진") + 사진 정보 (최대 30장)
+	@Transactional
+	public ChatMessage savePhotos(Long roomId, String sender, List<MultipartFile> files) {
+		List<Attachment> atts = fileStorage.storePhotos("rooms/" + roomId, files);
+		ChatRoom room = roomRepository.getReferenceById(roomId);
+		ChatMessageEntity saved = messageRepository.save(new ChatMessageEntity(room, sender, "사진"));
+		List<MessagePhoto> photos = photoService.save(MessageReaction.ROOM, saved.getId(), atts);
+		return ChatMessage.from(saved, List.of(), photos);
+	}
+
 	/**
 	 * 메시지 한 묶음 조회
 	 *
@@ -69,17 +82,24 @@ public class ChatService {
 		List<ChatMessageEntity> page = new ArrayList<>(hasMore ? rows.subList(0, PAGE_SIZE) : rows);
 		Collections.reverse(page); // 최신순 → 오래된순 (화면 표시 순서)
 
-		// 이 묶음의 반응을 한 번에 가져와서 메시지마다 붙임
-		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.ROOM,
-				page.stream().map(ChatMessageEntity::getId).toList());
-		return new MessagePage(
-				page.stream().map(e -> ChatMessage.from(e, reactions.getOrDefault(e.getId(), List.of()))).toList(),
-				hasMore);
+		// 이 묶음의 반응·사진 묶음을 한 번에 가져와서 메시지마다 붙임
+		List<Long> ids = page.stream().map(ChatMessageEntity::getId).toList();
+		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.ROOM, ids);
+		Map<Long, List<MessagePhoto>> photos = photoService.photosOf(MessageReaction.ROOM, ids);
+		return new MessagePage(page.stream().map(e -> ChatMessage.from(e, reactions.getOrDefault(e.getId(), List.of()),
+				photos.getOrDefault(e.getId(), List.of()))).toList(), hasMore);
 	}
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)
 	public Optional<Attachment> attachment(Long roomId, Long messageId) {
 		return findInRoom(roomId, messageId).filter(m -> !m.isDeleted()).map(ChatMessageEntity::getAttachment);
+	}
+
+	// 사진 묶음 속 한 장 내려받기 (이 방의, 삭제 안 된 메시지의, 지우지 않은 사진만)
+	public Optional<Attachment> photo(Long roomId, Long messageId, Long photoId) {
+		if (findInRoom(roomId, messageId).filter(m -> !m.isDeleted()).isEmpty())
+			return Optional.empty();
+		return photoService.attachment(MessageReaction.ROOM, messageId, photoId);
 	}
 
 	/**
@@ -110,7 +130,7 @@ public class ChatService {
 		if (m.isDeleted()) {
 			throw new IllegalArgumentException("삭제된 메시지는 수정할 수 없습니다.");
 		}
-		if (m.getAttachment() != null) {
+		if (m.getAttachment() != null || photoService.isAlbum(MessageReaction.ROOM, messageId)) {
 			throw new IllegalArgumentException("사진·파일 메시지는 수정할 수 없습니다.");
 		}
 		if (content.isEmpty()) {
@@ -121,6 +141,29 @@ public class ChatService {
 		}
 		m.edit(content); // 변경 감지로 UPDATE
 		return ChatMessage.edited(m);
+	}
+
+	/**
+	 * 사진 묶음에서 한 장만 지우기 (지울 수 있는 사람은 메시지 삭제와 같음)
+	 *
+	 * @param canManage 방장·관리자면 true → 다른 사람 사진도 삭제 가능
+	 * @return 방 사람들에게 보낼 신호: 남은 사진이 있으면 "사진 바뀜", 마지막 한 장이었으면 "메시지 삭제됨"
+	 */
+	@Transactional
+	public ChatMessage deletePhoto(Long roomId, Long messageId, Long photoId, String nickname, boolean canManage) {
+		ChatMessageEntity m = messageIn(roomId, messageId);
+		if (!canManage && !m.getSender().equals(nickname)) {
+			throw new IllegalArgumentException("내 사진만 삭제할 수 있습니다.");
+		}
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("이미 삭제된 메시지입니다.");
+		}
+		List<MessagePhoto> remaining = photoService.deleteOne(MessageReaction.ROOM, messageId, photoId);
+		if (remaining.isEmpty()) {
+			m.delete(); // 다 지웠으면 메시지도 삭제 (변경 감지로 UPDATE)
+			return ChatMessage.deleted(messageId);
+		}
+		return ChatMessage.photosChanged(m, remaining);
 	}
 
 	/**

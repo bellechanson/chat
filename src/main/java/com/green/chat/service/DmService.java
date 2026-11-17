@@ -17,12 +17,14 @@ import com.green.chat.dto.DmConversationView;
 import com.green.chat.dto.DmEditedEvent;
 import com.green.chat.dto.DmMessageDto;
 import com.green.chat.dto.DmPage;
+import com.green.chat.dto.DmPhotosEvent;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatUser;
 import com.green.chat.entity.DmConversation;
 import com.green.chat.entity.DmMessage;
+import com.green.chat.entity.MessagePhoto;
 import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatUserRepository;
 import com.green.chat.repository.DmConversationRepository;
@@ -48,19 +50,29 @@ public class DmService {
 	public record Reacted(ReactionEvent event, String partnerUsername) {
 	}
 
+	// 사진 한 장 삭제 결과: 남은 사진(다 지웠으면 photos가 빈 목록 → 메시지 삭제로 처리) + 상대 로그인 아이디
+	public record PhotoDeleted(DmPhotosEvent event, String partnerUsername) {
+		public boolean allDeleted() {
+			return event.photos().isEmpty();
+		}
+	}
+
 	private final DmConversationRepository conversationRepository;
 	private final DmMessageRepository messageRepository;
 	private final ChatUserRepository userRepository;
 	private final FileStorage fileStorage;
 	private final ReactionService reactionService;
+	private final PhotoService photoService;
 
 	public DmService(DmConversationRepository conversationRepository, DmMessageRepository messageRepository,
-			ChatUserRepository userRepository, FileStorage fileStorage, ReactionService reactionService) {
+			ChatUserRepository userRepository, FileStorage fileStorage, ReactionService reactionService,
+			PhotoService photoService) {
 		this.conversationRepository = conversationRepository;
 		this.messageRepository = messageRepository;
 		this.userRepository = userRepository;
 		this.fileStorage = fileStorage;
 		this.reactionService = reactionService;
+		this.photoService = photoService;
 	}
 
 	// ── 대화 시작: 있으면 기존 대화, 없으면 새로 ──
@@ -188,12 +200,13 @@ public class DmService {
 		Collections.reverse(page);
 
 		Map<Long, String> names = nicknames(c);
-		// 이 묶음의 반응을 한 번에 가져와서 메시지마다 붙임
-		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.DM,
-				page.stream().map(DmMessage::getId).toList());
+		// 이 묶음의 반응·사진 묶음을 한 번에 가져와서 메시지마다 붙임
+		List<Long> ids = page.stream().map(DmMessage::getId).toList();
+		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.DM, ids);
+		Map<Long, List<MessagePhoto>> photos = photoService.photosOf(MessageReaction.DM, ids);
 		return new DmPage(page.stream()
 				.map(m -> DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
-						reactions.getOrDefault(m.getId(), List.of())))
+						reactions.getOrDefault(m.getId(), List.of()), photos.getOrDefault(m.getId(), List.of())))
 				.toList(), hasMore);
 	}
 
@@ -219,6 +232,18 @@ public class DmService {
 		return saveAndReturn(c, senderId, senderNickname, new DmMessage(c, senderId, att.label(), att));
 	}
 
+	// ── 사진 묶음 보내기 (최대 30장, 메시지 하나) ──
+	@Transactional
+	public Sent sendPhotos(Long conversationId, Long senderId, String senderNickname, List<MultipartFile> files) {
+		DmConversation c = member(conversationId, senderId);
+		checkPartner(c, senderId);
+		List<Attachment> atts = fileStorage.storePhotos("dm/" + conversationId, files);
+		DmMessage saved = messageRepository.save(new DmMessage(c, senderId, "사진"));
+		c.touch();
+		List<MessagePhoto> photos = photoService.save(MessageReaction.DM, saved.getId(), atts);
+		return new Sent(DmMessageDto.from(saved, senderNickname, List.of(), photos), partnerUsernameOf(c, senderId));
+	}
+
 	private Sent saveAndReturn(DmConversation c, Long senderId, String senderNickname, DmMessage message) {
 		DmMessage saved = messageRepository.save(message);
 		c.touch(); // 목록 정렬용 시각 갱신 + 나갔던 사람에게 다시 보이게 (변경 감지로 UPDATE)
@@ -231,6 +256,15 @@ public class DmService {
 		if (findForMember(conversationId, userId).isEmpty())
 			return Optional.empty();
 		return findInConversation(conversationId, messageId).filter(m -> !m.isDeleted()).map(DmMessage::getAttachment);
+	}
+
+	// 사진 묶음 속 한 장 내려받기 (참여자만, 이 대화의 삭제 안 된 메시지의, 지우지 않은 사진만)
+	public Optional<Attachment> photo(Long conversationId, Long messageId, Long photoId, Long userId) {
+		if (findForMember(conversationId, userId).isEmpty())
+			return Optional.empty();
+		if (findInConversation(conversationId, messageId).filter(m -> !m.isDeleted()).isEmpty())
+			return Optional.empty();
+		return photoService.attachment(MessageReaction.DM, messageId, photoId);
 	}
 
 	// ── 읽음 처리: 새로 읽은 게 있으면 상대 로그인 아이디 반환 ──
@@ -272,7 +306,7 @@ public class DmService {
 		if (m.isDeleted()) {
 			throw new IllegalArgumentException("삭제된 메시지는 수정할 수 없습니다.");
 		}
-		if (m.getAttachment() != null) {
+		if (m.getAttachment() != null || photoService.isAlbum(MessageReaction.DM, messageId)) {
 			throw new IllegalArgumentException("사진·파일 메시지는 수정할 수 없습니다.");
 		}
 		String text = Formats.cut(content, MAX_CONTENT);
@@ -303,6 +337,26 @@ public class DmService {
 
 		List<ReactionDto> reactions = reactionService.toggle(MessageReaction.DM, messageId, userId, emoji);
 		return new Reacted(new ReactionEvent(conversationId, messageId, reactions), partnerUsernameOf(c, userId));
+	}
+
+	// ── 사진 묶음에서 한 장만 지우기 (내 메시지만, 다 지우면 메시지도 삭제) ──
+	@Transactional
+	public PhotoDeleted deletePhoto(Long conversationId, Long messageId, Long photoId, Long userId) {
+		DmConversation c = member(conversationId, userId);
+		DmMessage m = messageIn(conversationId, messageId);
+		if (!m.getSenderId().equals(userId)) {
+			throw new IllegalArgumentException("내 사진만 삭제할 수 있습니다.");
+		}
+		if (m.isDeleted()) {
+			throw new IllegalArgumentException("이미 삭제된 메시지입니다.");
+		}
+		List<MessagePhoto> remaining = photoService.deleteOne(MessageReaction.DM, messageId, photoId);
+		if (remaining.isEmpty()) {
+			m.delete(); // 변경 감지로 UPDATE
+		}
+		DmPhotosEvent event = new DmPhotosEvent(conversationId, messageId,
+				DmMessageDto.photoDtos(conversationId, messageId, remaining));
+		return new PhotoDeleted(event, partnerUsernameOf(c, userId));
 	}
 
 	// 탈퇴한 사람에게는 보낼 수 없음

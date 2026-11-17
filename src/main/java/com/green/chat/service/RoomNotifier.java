@@ -65,8 +65,10 @@ public class RoomNotifier {
 	}
 
 	// 입력 중 신호 → 방 안 사람들에게 (보낸 사람 화면에서는 자기 것을 무시)
-	public void typing(Long roomId, String nickname, boolean typing) {
-		messagingTemplate.convertAndSend("/topic/room/" + roomId + "/typing", new RoomTypingEvent(nickname, typing));
+	// photos·files: 올리는 중인 사진·파일 개수 (0이면 그냥 입력 중)
+	public void typing(Long roomId, String nickname, boolean typing, int photos, int files) {
+		messagingTemplate.convertAndSend("/topic/room/" + roomId + "/typing",
+				new RoomTypingEvent(nickname, typing, photos, files));
 	}
 
 	// 새 메시지 → 이 방에 들어와 본 회원들에게 데스크톱 알림 (보낸 사람 제외)

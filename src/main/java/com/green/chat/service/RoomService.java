@@ -12,6 +12,7 @@ import com.green.chat.entity.RoomBan;
 import com.green.chat.repository.ChatMessageRepository;
 import com.green.chat.repository.ChatRoomRepository;
 import com.green.chat.repository.ChatUserRepository;
+import com.green.chat.repository.MessagePhotoRepository;
 import com.green.chat.repository.MessageReactionRepository;
 import com.green.chat.repository.RoomBanRepository;
 import com.green.chat.repository.RoomReadRepository;
@@ -34,10 +35,12 @@ public class RoomService {
 	private final ChatUserRepository userRepository;
 	private final FileStorage fileStorage;
 	private final MessageReactionRepository reactionRepository;
+	private final MessagePhotoRepository photoRepository;
 
 	public RoomService(ChatRoomRepository roomRepository, ChatMessageRepository messageRepository,
 			RoomBanRepository banRepository, RoomReadRepository readRepository, ChatUserRepository userRepository,
-			FileStorage fileStorage, MessageReactionRepository reactionRepository) {
+			FileStorage fileStorage, MessageReactionRepository reactionRepository,
+			MessagePhotoRepository photoRepository) {
 		this.roomRepository = roomRepository;
 		this.messageRepository = messageRepository;
 		this.banRepository = banRepository;
@@ -45,6 +48,7 @@ public class RoomService {
 		this.userRepository = userRepository;
 		this.fileStorage = fileStorage;
 		this.reactionRepository = reactionRepository;
+		this.photoRepository = photoRepository;
 	}
 
 	public List<ChatRoom> findAll() {
@@ -120,6 +124,7 @@ public class RoomService {
 			throw new IllegalArgumentException("방장이나 관리자만 삭제할 수 있습니다.");
 		}
 		reactionRepository.deleteRoomReactions(roomId); // 메시지보다 먼저 (메시지 번호로 찾음)
+		photoRepository.deleteRoomPhotos(roomId); // 사진 묶음 정보도 메시지보다 먼저
 		messageRepository.deleteByRoomId(roomId);
 		banRepository.deleteByRoomId(roomId);
 		readRepository.deleteByRoomId(roomId);

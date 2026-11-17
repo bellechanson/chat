@@ -38,4 +38,11 @@ public class SidebarAdvice {
 	public int uploadMaxMb() {
 		return fileStorage.getMaxMb();
 	}
+
+	// 사진 묶음 하나 전체 최대 크기(MB) (application.yml chat.upload-bundle-max-mb) — 넘으면 화면에서
+	// 묶음을 나눠 보냄
+	@ModelAttribute("uploadBundleMaxMb")
+	public int uploadBundleMaxMb() {
+		return fileStorage.getBundleMaxMb();
+	}
 }

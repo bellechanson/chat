@@ -44,7 +44,8 @@ spring:
     servlet:
         multipart:
             max-file-size: ${chat.upload-max-mb}MB # 파일 하나 최대 (아래 chat.upload-max-mb 값)
-            max-request-size: 55MB # 요청 전체 최대 — upload-max-mb보다 5MB 크게 맞춰 둘 것
+            max-request-size: 520MB # 요청 전체 최대 — 사진 묶음(chat.upload-bundle-max-mb)보다 조금 크게 맞춰 둘 것
 chat:
     upload-dir: ${user.home}/chat-uploads
     upload-max-mb: 50 # 보낼 수 있는 파일 하나 크기(MB) — 서버 검사·화면 안내·multipart 설정이 모두 이 값을 씀
+    upload-bundle-max-mb: 500 # 사진 묶음(최대 30장) 하나 전체 크기(MB) — 넘으면 화면에서 묶음을 나눠 보냄

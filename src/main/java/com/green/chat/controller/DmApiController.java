@@ -1,5 +1,6 @@
 package com.green.chat.controller;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.core.io.Resource;
@@ -57,11 +58,33 @@ public class DmApiController {
 		}
 	}
 
-	// GET /api/dm/3/files/120 → 파일 내려받기 (참여자만)
+	// POST /api/dm/3/photos (files 여러 개) → 사진 묶음 메시지 하나로 저장 후 나와 상대에게 전송
+	@PostMapping("/api/dm/{id}/photos")
+	public ResponseEntity<Map<String, String>> uploadPhotos(@PathVariable Long id,
+			@RequestParam("files") List<MultipartFile> files, @AuthenticationPrincipal LoginUser loginUser) {
+		try {
+			DmService.Sent sent = dmService.sendPhotos(id, loginUser.getId(), loginUser.getNickname(), files);
+			dmNotifier.messageSent(loginUser.getUsername(), loginUser.getNickname(), sent);
+			return ResponseEntity.ok(Map.of("message", "ok"));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		}
+	}
+
+	// GET /api/dm/3/files/120/photos/12 → 사진 묶음 속 한 장 (참여자만), ?thumb=1 이면 작은 미리보기
+	@GetMapping("/api/dm/{id}/files/{messageId}/photos/{photoId}")
+	public ResponseEntity<Resource> photo(@PathVariable Long id, @PathVariable Long messageId,
+			@PathVariable Long photoId, @RequestParam(defaultValue = "false") boolean thumb,
+			@AuthenticationPrincipal LoginUser loginUser) {
+		return dmService.photo(id, messageId, photoId, loginUser.getId())
+				.map(att -> fileStorage.response("dm/" + id, att, thumb)).orElse(ResponseEntity.notFound().build());
+	}
+
+	// GET /api/dm/3/files/120 → 파일 내려받기 (참여자만), ?thumb=1 이면 사진은 작은 미리보기
 	@GetMapping("/api/dm/{id}/files/{messageId}")
 	public ResponseEntity<Resource> download(@PathVariable Long id, @PathVariable Long messageId,
-			@AuthenticationPrincipal LoginUser loginUser) {
-		return dmService.attachment(id, messageId, loginUser.getId()).map(att -> fileStorage.response("dm/" + id, att))
-				.orElse(ResponseEntity.notFound().build());
+			@RequestParam(defaultValue = "false") boolean thumb, @AuthenticationPrincipal LoginUser loginUser) {
+		return dmService.attachment(id, messageId, loginUser.getId())
+				.map(att -> fileStorage.response("dm/" + id, att, thumb)).orElse(ResponseEntity.notFound().build());
 	}
 }

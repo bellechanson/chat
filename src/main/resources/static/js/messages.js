@@ -340,6 +340,55 @@ function toolButton(label, title, onClick, danger = false) {
     return btn;
 }
 
+// ───── 사진 묶음 (여러 장을 메시지 하나로) ─────
+const ALBUM_VISIBLE = 9;   // 격자에 보이는 장수 (넘으면 9번째 칸에 "+21", 나머지는 크게 보기에서 넘겨 봄)
+
+// 사진 묶음 격자: 1장이면 지금처럼 한 장, 2장부터 격자 (2·4장은 2칸, 그 밖은 3칸)
+//   onDeletePhoto(사진번호): 있으면 칸마다 ✕ (그 사진만 삭제, 권한은 부르는 쪽에서 판단)
+//   각 사진 링크(.att-img)에 data-photo-id → 크게 보기 화면에서도 그 사진만 지울 수 있음
+function albumElement(photos, onImageLoad, onDeletePhoto) {
+    if (photos.length === 1) {
+        const a = fileElement(photos[0], onImageLoad);
+        a.dataset.photoId = photos[0].photoId;
+        return a;   // 한 장 남으면 메시지의 [삭제]로 지움
+    }
+    const grid = document.createElement('div');
+    grid.className = 'album';
+    grid.dataset.count = Math.min(photos.length, ALBUM_VISIBLE);
+    photos.forEach((p, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'album-cell';
+        cell.hidden = i >= ALBUM_VISIBLE;   // 숨긴 칸도 크게 보기에서는 넘겨 볼 수 있음
+        const a = fileElement(p, onImageLoad);
+        a.dataset.photoId = p.photoId;
+        cell.appendChild(a);
+        if (i === ALBUM_VISIBLE - 1 && photos.length > ALBUM_VISIBLE) {
+            const more = document.createElement('span');
+            more.className = 'album-more';
+            more.textContent = '+' + (photos.length - ALBUM_VISIBLE);
+            cell.appendChild(more);
+        }
+        if (onDeletePhoto) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'album-del';
+            del.title = '이 사진만 삭제';
+            del.setAttribute('aria-label', `${i + 1}번째 사진 삭제`);
+            del.textContent = '✕';
+            del.onclick = () => onDeletePhoto(p.photoId);
+            cell.appendChild(del);
+        }
+        grid.appendChild(cell);
+    });
+    return grid;
+}
+
+// 묶음에서 사진이 지워짐 (나·다른 사람 모두) → 남은 사진으로 다시 그림
+function setAlbum(div, photos) {
+    if (div.classList.contains('deleted') || !photos || photos.length === 0) return;
+    div.querySelector('.bubble').replaceChildren(albumElement(photos, div._onImageLoad, div._onDeletePhoto));
+}
+
 // ───── 메시지 삭제 ─────
 // 삭제 표시 (수정하던 중이었으면 수정창도 같이 닫힘 — 말풍선 내용을 통째로 바꾸므로)
 //   반응 칩·반응 버튼도 없앰 (고르는 창이 이 메시지 것이면 닫음)
@@ -351,6 +400,7 @@ function markDeleted(div) {
     bubble.textContent = '삭제된 메시지입니다';
     if (reactPicker && reactPicker._owner && div.contains(reactPicker._owner)) closeReactPicker();
     div._onReact = null;
+    div._onDeletePhoto = null;
     div.querySelectorAll('.msg-tools, .msg-edited, .reactions').forEach(el => el.remove());
 }
 
@@ -442,9 +492,12 @@ function startEdit(div, save) {
 //   unread     : true면 시각 옆에 "1" (DM에서 상대가 아직 안 읽음)
 //   onEdit     : 있으면 [수정] 버튼, 저장할 때 onEdit(새 내용) (글 메시지에만, 권한은 부르는 쪽에서 판단)
 //   onDelete   : 있으면 [삭제] 버튼 (권한은 부르는 쪽에서 판단)
+//   photos     : 사진 묶음이면 사진 목록 (격자로 그림, 글 수정 불가)
+//   onDeletePhoto: 있으면 묶음 칸마다 ✕, onDeletePhoto(사진번호)
 //   onImageLoad: 사진이 다 불러와지면 호출 (맨 아래 유지용)
 function messageLine({ id, name, mine, time, content, file, deleted, editedAt = null, unread = false,
-    reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, onImageLoad }) {
+    reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, photos = [],
+    onDeletePhoto = null, onImageLoad }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제·수정·반응 신호가 오면 이 번호로 찾음
@@ -475,7 +528,11 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
 
     const bubble = document.createElement('div');
     bubble.className = 'bubble';
-    if (file) {   // 사진·파일 메시지 (files.js)
+    const album = !!(photos && photos.length);
+    if (album) {   // 사진 묶음
+        bubble.classList.add('has-img');
+        bubble.appendChild(albumElement(photos, onImageLoad, onDeletePhoto));
+    } else if (file) {   // 사진·파일 메시지 하나 (files.js)
         bubble.classList.add(file.image ? 'has-img' : 'has-file');
         bubble.appendChild(fileElement(file, onImageLoad));
     } else {
@@ -492,12 +549,14 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
     if (editedAt) setEditedMark(div, editedAt);
     div._myId = myId;
     div._onReact = onReact;
+    div._onImageLoad = onImageLoad;       // 묶음을 다시 그릴 때 (setAlbum)
+    div._onDeletePhoto = onDeletePhoto;
 
     // 오른쪽 버튼 묶음: [반응](글·사진·파일 모두) [수정](글 메시지만) [삭제]
     const tools = document.createElement('span');
     tools.className = 'msg-tools';
     if (onReact) tools.appendChild(toolButton('반응', '반응 달기', btn => openReactPicker(btn, onReact)));
-    if (onEdit && !file) tools.appendChild(toolButton('수정', '메시지 수정', () => startEdit(div, onEdit)));
+    if (onEdit && !file && !album) tools.appendChild(toolButton('수정', '메시지 수정', () => startEdit(div, onEdit)));
     if (onDelete) tools.appendChild(toolButton('삭제', '메시지 삭제', () => onDelete(), true));
     if (tools.children.length > 0) head.appendChild(tools);
 

@@ -10,6 +10,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Controller;
 
+import com.green.chat.dto.DeletePhotoRequest;
 import com.green.chat.dto.DeleteRequest;
 import com.green.chat.dto.DmDeletedEvent;
 import com.green.chat.dto.EditRequest;
@@ -67,7 +68,7 @@ public class DmSocketController {
 		});
 	}
 
-	// /app/dm/{id}/typing : 입력 중 신호를 상대에게만 전달 (참여자만)
+	// /app/dm/{id}/typing : 입력 중 신호를 상대에게만 전달 (참여자만) — 사진·파일을 올리는 중이면 개수도 함께
 	@MessageMapping("/dm/{conversationId}/typing")
 	public void typing(@DestinationVariable Long conversationId, @Payload TypingRequest request, Principal principal) {
 		LoginUser user = LoginUser.of(principal);
@@ -76,7 +77,8 @@ public class DmSocketController {
 
 		dmService.partnerUsername(conversationId, user.getId())
 				.ifPresent(partner -> messagingTemplate.convertAndSendToUser(partner, "/queue/dm-typing",
-						new DmTypingEvent(conversationId, user.getNickname(), request.typing())));
+						new DmTypingEvent(conversationId, user.getNickname(), request.typing(), request.photoCount(),
+								request.fileCount())));
 	}
 
 	// /app/dm/{id}/delete : 내 메시지 삭제 → 나(다른 탭 포함)와 상대 화면에 반영
@@ -92,6 +94,30 @@ public class DmSocketController {
 			toBoth(principal.getName(), partner, "/queue/dm-deleted", new DmDeletedEvent(conversationId, request.id()));
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 삭제 실패] conv={}, msg={}, reason={}", conversationId, request.id(), e.getMessage());
+		}
+	}
+
+	// /app/dm/{id}/delete-photo : 내 사진 묶음에서 한 장만 삭제 → 나(다른 탭 포함)와 상대 화면에서 그 사진만 빠짐
+	// 마지막 한 장이었으면 메시지 삭제와 같은 신호 ("삭제된 메시지입니다")
+	@MessageMapping("/dm/{conversationId}/delete-photo")
+	public void deletePhoto(@DestinationVariable Long conversationId, @Payload DeletePhotoRequest request,
+			Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null)
+			return;
+
+		try {
+			DmService.PhotoDeleted result = dmService.deletePhoto(conversationId, request.id(), request.photoId(),
+					user.getId());
+			if (result.allDeleted()) {
+				toBoth(principal.getName(), result.partnerUsername(), "/queue/dm-deleted",
+						new DmDeletedEvent(conversationId, request.id()));
+			} else {
+				toBoth(principal.getName(), result.partnerUsername(), "/queue/dm-photos", result.event());
+			}
+		} catch (IllegalArgumentException e) {
+			log.warn("[DM 사진 삭제 실패] conv={}, msg={}, photo={}, reason={}", conversationId, request.id(),
+					request.photoId(), e.getMessage());
 		}
 	}
 

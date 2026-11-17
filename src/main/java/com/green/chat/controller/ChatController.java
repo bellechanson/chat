@@ -12,6 +12,7 @@ import org.springframework.stereotype.Controller;
 
 import com.green.chat.dto.SendRequest;
 import com.green.chat.dto.ChatMessage;
+import com.green.chat.dto.DeletePhotoRequest;
 import com.green.chat.dto.DeleteRequest;
 import com.green.chat.dto.EditRequest;
 import com.green.chat.dto.MessageType;
@@ -90,13 +91,13 @@ public class ChatController {
 		notifier.messageSent(roomId, user.getId(), saved); // 방 안 + 목록 뱃지 + 데스크톱 알림
 	}
 
-	// 입력 중 신호 (들어갈 수 있는 방에서만)
+	// 입력 중 신호 (들어갈 수 있는 방에서만) — 사진·파일을 올리는 중이면 개수도 함께
 	@MessageMapping("/chat/{roomId}/typing")
 	public void typing(@DestinationVariable Long roomId, @Payload TypingRequest request, Principal principal) {
 		LoginUser user = LoginUser.of(principal);
 		if (user == null || request == null || !roomService.canJoin(roomId, user.getId()))
 			return;
-		notifier.typing(roomId, user.getNickname(), request.typing());
+		notifier.typing(roomId, user.getNickname(), request.typing(), request.photoCount(), request.fileCount());
 	}
 
 	// 메시지 삭제: 내 메시지, 또는 방장·관리자는 모든 메시지
@@ -116,6 +117,27 @@ public class ChatController {
 			return;
 		}
 		notifier.toRoom(roomId, ChatMessage.deleted(request.id()));
+	}
+
+	// 사진 묶음에서 한 장만 삭제: 지울 수 있는 사람은 메시지 삭제와 같음
+	// → 방 안 모두의 화면에서 그 사진만 빠짐 (마지막 한 장이면 "삭제된 메시지입니다")
+	@MessageMapping("/chat/{roomId}/delete-photo")
+	public void deletePhoto(@DestinationVariable Long roomId, @Payload DeletePhotoRequest request,
+			Principal principal) {
+		LoginUser user = LoginUser.of(principal);
+		if (user == null || request == null || request.id() == null || !roomService.canJoin(roomId, user.getId()))
+			return;
+
+		boolean canManage = roomService.findById(roomId)
+				.map(room -> roomService.canManage(room, user.getId(), user.isAdmin())).orElse(false);
+		try {
+			ChatMessage changed = chatService.deletePhoto(roomId, request.id(), request.photoId(), user.getNickname(),
+					canManage);
+			notifier.toRoom(roomId, changed);
+		} catch (IllegalArgumentException e) {
+			log.warn("[사진 삭제 실패] room={}, msg={}, photo={}, reason={}", roomId, request.id(), request.photoId(),
+					e.getMessage());
+		}
 	}
 
 	// 메시지 수정: 내 글 메시지만 → 방 안 모두의 화면에서 내용 교체 + "(수정됨)"

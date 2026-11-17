@@ -138,6 +138,8 @@
 				unread: mine && !m.read,                                // 상대가 안 읽은 내 메시지에 "1"
 				onEdit: mine && canSend ? (text) => editMessage(m.id, text) : null,   // 내 글 메시지만 (상대 탈퇴 시 막힘)
 				onDelete: mine ? () => deleteMessage(m.id) : null,      // DM은 내 메시지만 삭제 가능
+				photos: m.photos,                                       // 사진 묶음
+				onDeletePhoto: mine ? (photoId) => deletePhoto(m.id, photoId) : null,   // 내 묶음에서 한 장씩
 				onImageLoad: list.keepBottom
 			});
 		}
@@ -173,6 +175,23 @@
 			});
 		}
 
+		// 사진 묶음에서 한 장만 삭제 → 나와 상대 화면에서 그 사진만 빠짐 (마지막 한 장이면 메시지 삭제)
+		function deletePhoto(id, photoId) {
+			if (!client || !client.connected) return;
+			if (!confirm('이 사진만 삭제할까요?\n상대 화면에서도 이 사진이 빠집니다.')) return;
+			client.publish({
+				destination: `/app/dm/${convId}/delete-photo`,
+				body: JSON.stringify({id, photoId: Number(photoId)})
+			});
+		}
+
+		// 묶음에서 사진이 지워짐 (나·상대·내 다른 탭) → 남은 사진으로 다시 그림
+		function onPhotos(e) {
+			if (e.conversationId !== convId) return;
+			const target = list.find(e.messageId);
+			if (target) setAlbum(target, e.photos);
+		}
+
 		// ── 대화방 나가기 (sidebar.js의 leaveDm: 확인 후 나가고 홈으로) ──
 		el('leaveBtn').addEventListener('click', () => leaveDm(convId, partnerName));
 
@@ -184,7 +203,9 @@
 			if (e.conversationId !== convId || !el('typing')) return;
 			if (!e.typing) return hideTyping();
 
-			el('typingText').textContent = `${e.nickname}님이 입력 중`;
+			// 사진·파일을 올리는 중이면 "○○님이 사진 12장을 보내는 중" (files.js의 uploadLabel)
+			const upload = uploadLabel(e.photos, e.files);
+			el('typingText').textContent = upload ? `${e.nickname}님이 ${upload}을 보내는 중` : `${e.nickname}님이 입력 중`;
 			el('typing').classList.add('on');
 			clearTimeout(typingHideTimer);
 			typingHideTimer = setTimeout(hideTyping, TYPING_SHOW_MS);
@@ -225,12 +246,20 @@
 				if (e.key === 'Enter' && !e.isComposing) sendMessage();
 			});
 
-			// [첨부] 버튼, 붙여넣기, 끌어다 놓기 (files.js)
+			// [첨부] 버튼, 붙여넣기, 끌어다 놓기 (files.js) — 사진은 묶음으로, 올리는 동안 상대에게 "보내는 중"
 			setupAttach({
 				button: el('attachBtn'),
 				input: el('fileInput'),
 				textInput: el('content'),
-				uploadUrl: `/api/dm/${convId}/files`
+				uploadUrl: `/api/dm/${convId}/files`,
+				photoUrl: `/api/dm/${convId}/photos`,
+				onUploading: (photos, files) => {
+					if (!client || !client.connected) return;
+					client.publish({
+						destination: `/app/dm/${convId}/typing`,
+						body: JSON.stringify({typing: photos + files > 0, photos, files})
+					});
+				}
 			});
 		}
 
@@ -243,6 +272,7 @@
 			c.subscribe('/user/queue/dm-deleted', f => onDeleted(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-edited', f => onEdited(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-reactions', f => onReactions(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-photos', f => onPhotos(JSON.parse(f.body)));
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
 			markRead();
 			el('content')?.focus();

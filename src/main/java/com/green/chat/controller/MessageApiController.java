@@ -1,5 +1,6 @@
 package com.green.chat.controller;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.core.io.Resource;
@@ -66,14 +67,45 @@ public class MessageApiController {
 		}
 	}
 
-	// GET /api/rooms/1/files/351 → 파일 내려받기 (이 방에 들어갈 수 있는 사람만)
-	@GetMapping("/{roomId}/files/{messageId}")
-	public ResponseEntity<Resource> download(@PathVariable Long roomId, @PathVariable Long messageId,
+	// POST /api/rooms/1/photos (files 여러 개) → 사진 묶음 메시지 하나로 저장 후 방 안 사람들에게 전송
+	@PostMapping("/{roomId}/photos")
+	public ResponseEntity<Map<String, String>> uploadPhotos(@PathVariable Long roomId,
+			@RequestParam("files") List<MultipartFile> files, @AuthenticationPrincipal LoginUser loginUser) {
+		if (!roomService.canJoin(roomId, loginUser.getId())) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "이 방에는 보낼 수 없습니다."));
+		}
+		try {
+			ChatMessage saved = chatService.savePhotos(roomId, loginUser.getNickname(), files);
+			notifier.messageSent(roomId, loginUser.getId(), saved);
+			return ResponseEntity.ok(Map.of("message", "ok"));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		}
+	}
+
+	// GET /api/rooms/1/files/351/photos/12 → 사진 묶음 속 한 장 (이 방에 들어갈 수 있는 사람만)
+	// ?thumb=1 이면 작은 미리보기 (격자용)
+	@GetMapping("/{roomId}/files/{messageId}/photos/{photoId}")
+	public ResponseEntity<Resource> photo(@PathVariable Long roomId, @PathVariable Long messageId,
+			@PathVariable Long photoId, @RequestParam(defaultValue = "false") boolean thumb,
 			@AuthenticationPrincipal LoginUser loginUser) {
 		if (!roomService.canJoin(roomId, loginUser.getId())) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 		}
-		return chatService.attachment(roomId, messageId).map(att -> fileStorage.response("rooms/" + roomId, att))
+		return chatService.photo(roomId, messageId, photoId)
+				.map(att -> fileStorage.response("rooms/" + roomId, att, thumb))
+				.orElse(ResponseEntity.notFound().build());
+	}
+
+	// GET /api/rooms/1/files/351 → 파일 내려받기 (이 방에 들어갈 수 있는 사람만)
+	// ?thumb=1 이면 사진은 작은 미리보기 (말풍선용)
+	@GetMapping("/{roomId}/files/{messageId}")
+	public ResponseEntity<Resource> download(@PathVariable Long roomId, @PathVariable Long messageId,
+			@RequestParam(defaultValue = "false") boolean thumb, @AuthenticationPrincipal LoginUser loginUser) {
+		if (!roomService.canJoin(roomId, loginUser.getId())) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		}
+		return chatService.attachment(roomId, messageId).map(att -> fileStorage.response("rooms/" + roomId, att, thumb))
 				.orElse(ResponseEntity.notFound().build());
 	}
 }

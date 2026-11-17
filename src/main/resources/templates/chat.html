@@ -107,6 +107,11 @@
 				if (target) markEdited(target, msg.content, msg.editedAt);   // 알림·안 읽은 수는 그대로
 				return;
 			}
+			if (msg.type === 'PHOTOS_CHANGED') {
+				const target = list.find(msg.id);
+				if (target) setAlbum(target, msg.photos);   // 묶음에서 한 장이 지워짐 → 남은 사진으로
+				return;
+			}
 
 			// 메시지를 보냈거나 나갔으면 그 사람의 "입력 중" 끝
 			if (msg.sender && typers.has(msg.sender)) removeTyper(msg.sender);
@@ -151,6 +156,9 @@
 				onEdit: msg.id && mine ? (text) => editMessage(msg.id, text) : null,
 				// 내 메시지, 또는 방장·관리자는 지울 수 있음
 				onDelete: msg.id && (mine || canManage) ? () => deleteMessage(msg.id) : null,
+				// 사진 묶음: 지울 수 있는 사람은 한 장씩도 지울 수 있음
+				photos: msg.photos,
+				onDeletePhoto: msg.id && (mine || canManage) ? (photoId) => deletePhoto(msg.id, photoId) : null,
 				onImageLoad: list.keepBottom
 			});
 		}
@@ -185,9 +193,19 @@
 			});
 		}
 
-		// ── 입력 중 표시 ──
+		// 사진 묶음에서 한 장만 삭제 → 모두의 화면에서 그 사진만 빠짐 (마지막 한 장이면 메시지 삭제)
+		function deletePhoto(id, photoId) {
+			if (!client || !client.connected) return;
+			if (!confirm('이 사진만 삭제할까요?\n모든 사람의 화면에서 이 사진이 빠집니다.')) return;
+			client.publish({
+				destination: `/app/chat/${roomId}/delete-photo`,
+				body: JSON.stringify({id, photoId: Number(photoId)})
+			});
+		}
+
+		// ── 입력 중 표시 (사진·파일을 올리는 중이면 "○○님이 사진 12장을 보내는 중") ──
 		const TYPING_SHOW_MS = 4000;   // 신호가 이 시간 동안 안 오면 그 사람은 목록에서 뺌
-		const typers = new Map();      // 입력 중인 사람: 닉네임 → 숨김 타이머
+		const typers = new Map();      // 입력 중인 사람: 닉네임 → { timer: 숨김 타이머, upload: "사진 12장" 또는 "" }
 
 		// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
 		const typing = watchTyping(el('content'), (on) => {
@@ -202,26 +220,33 @@
 			if (e.nickname === nickname) return;   // 내 신호는 무시
 			if (!e.typing) return removeTyper(e.nickname);
 
-			clearTimeout(typers.get(e.nickname));
-			typers.set(e.nickname, setTimeout(() => removeTyper(e.nickname), TYPING_SHOW_MS));
+			clearTimeout(typers.get(e.nickname)?.timer);
+			typers.set(e.nickname, {
+				timer: setTimeout(() => removeTyper(e.nickname), TYPING_SHOW_MS),
+				upload: uploadLabel(e.photos, e.files)   // files.js
+			});
 			renderTyping();
 		}
 
 		function removeTyper(name) {
-			clearTimeout(typers.get(name));
+			clearTimeout(typers.get(name)?.timer);
 			typers.delete(name);
 			renderTyping();
 		}
 
 		// 1명: 철수님이 / 2명: 철수, 영희님이 / 3명 이상: 철수 외 2명이
+		// 올리는 사람이 있으면 그 사람 먼저: 철수님이 사진 12장을 보내는 중 (외 1명 입력 중)
 		function renderTyping() {
 			const names = [...typers.keys()];
 			if (names.length === 0) {
 				el('typing').classList.remove('on');
 				return;
 			}
-			el('typingText').textContent =
-				names.length === 1 ? `${names[0]}님이 입력 중`
+			const uploader = names.find(name => typers.get(name).upload);
+			el('typingText').textContent = uploader
+				? `${uploader}님이 ${typers.get(uploader).upload}을 보내는 중`
+				+ (names.length > 1 ? ` (외 ${names.length - 1}명 입력 중)` : '')
+				: names.length === 1 ? `${names[0]}님이 입력 중`
 					: names.length === 2 ? `${names[0]}, ${names[1]}님이 입력 중`
 						: `${names[0]} 외 ${names.length - 1}명이 입력 중`;
 			el('typing').classList.add('on');
@@ -330,12 +355,20 @@
 			if (e.key === 'Enter' && !e.isComposing) sendMessage();
 		});
 
-		// [첨부] 버튼, 붙여넣기 (files.js)
+		// [첨부] 버튼, 붙여넣기, 끌어다 놓기 (files.js) — 사진은 묶음으로, 올리는 동안 방 사람들에게 "보내는 중"
 		setupAttach({
 			button: el('attachBtn'),
 			input: el('fileInput'),
 			textInput: el('content'),
-			uploadUrl: `/api/rooms/${roomId}/files`
+			uploadUrl: `/api/rooms/${roomId}/files`,
+			photoUrl: `/api/rooms/${roomId}/photos`,
+			onUploading: (photos, files) => {
+				if (!client || !client.connected) return;
+				client.publish({
+					destination: `/app/chat/${roomId}/typing`,
+					body: JSON.stringify({typing: photos + files > 0, photos, files})
+				});
+			}
 		});
 
 		const deleteForm = el('deleteForm');
