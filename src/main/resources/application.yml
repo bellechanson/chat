@@ -1,8 +1,8 @@
 server:
     port: 8081
     servlet:
-      session:
-        persistent: false   # STS 재시작 시 세션 복원 안 함 (jar 실행과 똑같이)
+        session:
+            persistent: false # STS 재시작 시 세션 복원 안 함 (jar 실행과 똑같이)
 
 spring:
     application:
@@ -42,8 +42,9 @@ spring:
     thymeleaf:
         cache: false
     servlet:
-      ultipart:
-        max-file-size: 10MB      # 파일 하나 최대
-        max-request-size: 11MB   # 요청 전체 최대
+        multipart:
+            max-file-size: ${chat.upload-max-mb}MB # 파일 하나 최대 (아래 chat.upload-max-mb 값)
+            max-request-size: 55MB # 요청 전체 최대 — upload-max-mb보다 5MB 크게 맞춰 둘 것
 chat:
     upload-dir: ${user.home}/chat-uploads
+    upload-max-mb: 50 # 보낼 수 있는 파일 하나 크기(MB) — 서버 검사·화면 안내·multipart 설정이 모두 이 값을 씀

@@ -33,7 +33,6 @@ import com.green.chat.entity.Attachment;
 public class FileStorage {
 
 	private static final Logger log = LoggerFactory.getLogger(FileStorage.class);
-	private static final long MAX_SIZE = 10L * 1024 * 1024; // 10MB
 
 	// 보낼 수 있는 확장자 → 내려줄 때 쓸 종류 (실행 파일, html, svg 등은 목록에 없으니 막힘)
 	private static final Map<String, String> TYPES = Map.ofEntries(Map.entry("jpg", "image/jpeg"),
@@ -48,11 +47,19 @@ public class FileStorage {
 			Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
 
 	private final Path root;
+	private final int maxMb; // 파일 하나 최대 크기(MB) — application.yml chat.upload-max-mb
 
-	public FileStorage(@Value("${chat.upload-dir:${user.home}/chat-uploads}") String uploadDir) throws IOException {
+	public FileStorage(@Value("${chat.upload-dir:${user.home}/chat-uploads}") String uploadDir,
+			@Value("${chat.upload-max-mb:50}") int maxMb) throws IOException {
 		this.root = Paths.get(uploadDir).toAbsolutePath().normalize();
+		this.maxMb = maxMb;
 		Files.createDirectories(root);
-		log.info("[파일 저장 폴더] {}", root);
+		log.info("[파일 저장 폴더] {} (파일 하나 최대 {}MB)", root, maxMb);
+	}
+
+	// 화면(입력칸 조각)에서 ${@fileStorage.maxMb}로 읽어 안내 문구·미리 검사에 씀
+	public int getMaxMb() {
+		return maxMb;
 	}
 
 	// 검사 → 저장 → 첨부 정보 반환 (문제가 있으면 IllegalArgumentException, 메시지는 화면에 그대로 표시)
@@ -60,8 +67,8 @@ public class FileStorage {
 		if (file == null || file.isEmpty()) {
 			throw new IllegalArgumentException("빈 파일은 보낼 수 없습니다.");
 		}
-		if (file.getSize() > MAX_SIZE) {
-			throw new IllegalArgumentException("10MB 이하 파일만 보낼 수 있습니다.");
+		if (file.getSize() > (long) maxMb * 1024 * 1024) {
+			throw new IllegalArgumentException(maxMb + "MB 이하 파일만 보낼 수 있습니다.");
 		}
 
 		String name = cleanName(file.getOriginalFilename());
