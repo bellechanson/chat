@@ -1354,3 +1354,122 @@ button.react-chip:hover {
 .mention-pop li:hover {
 	background: var(--side);
 }
+
+
+/* ───── 메시지 검색 (search.js): 오른쪽 패널 ───── */
+.pane {
+	position: relative;
+}
+
+/* 패널이 열리면 메시지·입력칸이 패널 왼쪽까지만 */
+.pane.searching .messages,
+.pane.searching .composer {
+	margin-right: 340px;
+}
+
+.search-panel {
+	position: absolute;
+	top: 64px;
+	right: 0;
+	bottom: 0;
+	z-index: 15;
+	width: 340px;
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--line);
+	background: #FFFFFF;
+}
+
+.search-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 12px 8px 16px;
+}
+
+.search-input {
+	flex: 1;
+	min-width: 0;
+	height: 36px;
+	padding: 0 12px;
+	border: 1px solid var(--line-strong);
+	border-radius: 8px;
+	font: inherit;
+	font-size: 14px;
+	outline: none;
+}
+
+.search-input:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.search-status {
+	padding: 0 16px 8px;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.search-results {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	margin: 0;
+	padding: 0 8px 12px;
+	list-style: none;
+}
+
+.search-hit button {
+	display: block;
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--ink);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.search-hit button:hover,
+.search-hit.on button {
+	background: var(--side);
+}
+
+.hit-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-bottom: 2px;
+}
+
+.hit-who {
+	font-size: 13px;
+	font-weight: 700;
+}
+
+.hit-time {
+	font-size: 12px;
+	color: var(--muted);
+}
+
+/* 내용은 3줄까지 */
+.hit-text {
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	color: var(--ink-2);
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* 검색어 강조 (결과 목록, 이동한 말풍선) */
+.search-mark {
+	padding: 0 1px;
+	border-radius: 3px;
+	background: #FFE066;
+	color: var(--ink);
+}

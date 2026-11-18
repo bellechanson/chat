@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,6 +22,8 @@ import com.green.chat.dto.MessagePage;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.ReplyDto;
+import com.green.chat.dto.SearchHit;
+import com.green.chat.dto.SearchPage;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatMessageEntity;
 import com.green.chat.entity.ChatRoom;
@@ -28,6 +31,7 @@ import com.green.chat.entity.MessagePhoto;
 import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatMessageRepository;
 import com.green.chat.repository.ChatRoomRepository;
+import com.green.chat.util.Formats;
 
 @Service
 @Transactional(readOnly = true)
@@ -135,6 +139,39 @@ public class ChatService {
 			return ChatMessage.from(e, reactions.getOrDefault(e.getId(), List.of()),
 					photos.getOrDefault(e.getId(), List.of()), reply, mentions.getOrDefault(e.getId(), Map.of()));
 		}).toList(), hasMore);
+	}
+
+	/**
+	 * 방 안 메시지 검색 (최신순, 삭제된 것 제외) — "@영희"·"영희"로 영희를 멘션한 메시지도 찾음
+	 *
+	 * @param beforeId null이면 최신부터, 값이 있으면 그 번호보다 오래된 것 (이어서 찾기)
+	 */
+	public SearchPage search(Long roomId, String query, Long beforeId) {
+		String q = Formats.cut(query, SearchPage.MAX_QUERY);
+		if (q.isEmpty())
+			return SearchPage.empty();
+
+		// 이름에 검색어가 들어간 이 방 회원 → 그 사람을 멘션한 메시지 후보도 같이
+		String name = (q.startsWith("@") ? q.substring(1) : q).toLowerCase();
+		List<Long> userIds = name.isEmpty() ? List.of()
+				: mentionService.members(roomId).stream().filter(m -> m.nickname().toLowerCase().contains(name))
+						.map(MentionService.Member::id).toList();
+		List<ChatMessageEntity> rows = messageRepository.search(roomId, beforeId == null ? Long.MAX_VALUE : beforeId,
+				Boolean.FALSE, Formats.likePattern(q), userIds.isEmpty() ? List.of(-1L) : userIds,
+				PageRequest.of(0, SearchPage.SIZE + 1));
+
+		boolean hasMore = rows.size() > SearchPage.SIZE;
+		List<ChatMessageEntity> page = hasMore ? rows.subList(0, SearchPage.SIZE) : rows;
+		Map<Long, Map<Long, String>> mentions = mentionService.mentionsOf(page);
+		String lower = q.toLowerCase();
+		List<SearchHit> hits = page.stream()
+				// 화면에 보이는 글자("@영희 안녕")에 검색어가 있는 것만 (멘션 후보 중 실제로는 아닌 것 빼기)
+				.filter(m -> MentionService.plain(m.getContent(), mentions.get(m.getId())).toLowerCase()
+						.contains(lower))
+				.map(m -> SearchHit.of(m.getId(), m.getSender(), m.getContent(),
+						mentions.getOrDefault(m.getId(), Map.of()), m.getCreatedAt()))
+				.toList();
+		return new SearchPage(hits, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId());
 	}
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)

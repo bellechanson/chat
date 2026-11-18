@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,18 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, Long> {
 	List<DmMessage> findTop51ByConversationIdOrderByIdDesc(Long conversationId);
 
 	List<DmMessage> findTop51ByConversationIdAndIdLessThanOrderByIdDesc(Long conversationId, Long beforeId);
+
+	// 메시지 검색 (최신순, 삭제된 것 제외)
+	@Query("""
+			select m from DmMessage m
+			 where m.conversation.id = :conversationId
+			   and m.id < :beforeId
+			   and (m.deleted is null or m.deleted = :no)
+			   and lower(m.content) like :pattern escape '\\'
+			 order by m.id desc
+			""")
+	List<DmMessage> search(@Param("conversationId") Long conversationId, @Param("beforeId") Long beforeId,
+			@Param("no") Boolean no, @Param("pattern") String pattern, Pageable pageable);
 
 	// 이 메시지 뒤에 메시지가 더 있는지 (없으면 마지막 메시지 → 수정 시 사이드바 미리보기도 바꿈)
 	boolean existsByConversationIdAndIdGreaterThan(Long conversationId, Long id);

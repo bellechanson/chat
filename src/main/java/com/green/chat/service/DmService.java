@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,6 +25,8 @@ import com.green.chat.dto.DmPhotosEvent;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.ReplyDto;
+import com.green.chat.dto.SearchHit;
+import com.green.chat.dto.SearchPage;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatUser;
 import com.green.chat.entity.DmConversation;
@@ -234,6 +237,25 @@ public class DmService {
 			return DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
 					reactions.getOrDefault(m.getId(), List.of()), photos.getOrDefault(m.getId(), List.of()), reply);
 		}).toList(), hasMore);
+	}
+
+	// ── 대화 검색 (참여자만, 최신순, 삭제된 것 제외) — beforeId: 이어서 찾을 때 그 번호보다 오래된 것 ──
+	public SearchPage search(Long conversationId, Long userId, String query, Long beforeId) {
+		DmConversation c = member(conversationId, userId);
+		String q = Formats.cut(query, SearchPage.MAX_QUERY);
+		if (q.isEmpty())
+			return SearchPage.empty();
+
+		List<DmMessage> rows = messageRepository.search(conversationId, beforeId == null ? Long.MAX_VALUE : beforeId,
+				Boolean.FALSE, Formats.likePattern(q), PageRequest.of(0, SearchPage.SIZE + 1));
+		boolean hasMore = rows.size() > SearchPage.SIZE;
+		List<DmMessage> page = hasMore ? rows.subList(0, SearchPage.SIZE) : rows;
+		Map<Long, String> names = nicknames(c);
+		List<SearchHit> hits = page.stream()
+				.map(m -> SearchHit.of(m.getId(), names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
+						m.getContent(), Map.of(), m.getCreatedAt()))
+				.toList();
+		return new SearchPage(hits, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId());
 	}
 
 	// ── 보내기 (replyToId: 답장할 메시지 번호 — 이 대화의 삭제 안 된 메시지만, 아니면 보통 메시지로) ──

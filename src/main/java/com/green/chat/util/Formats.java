@@ -35,6 +35,12 @@ public final class Formats {
 		return v.length() > max ? v.substring(0, max) : v;
 	}
 
+	// 검색어 → LIKE 조건 ("10%" → "%10\%%"): 소문자로, %·_·\ 는 글자 그대로 찾게 (쿼리에 escape '\')
+	public static String likePattern(String query) {
+		String q = query.toLowerCase().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+		return "%" + q + "%";
+	}
+
 	// 데스크톱 알림 미리보기 (최대 100자)
 	public static String preview(String text) {
 		return cut(text, 100);

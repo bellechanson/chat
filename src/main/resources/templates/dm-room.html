@@ -11,6 +11,7 @@
 	<script th:src="@{/js/api.js}"></script>
 	<script th:src="@{/js/files.js}"></script>
 	<script th:src="@{/js/mute.js}"></script>
+	<script th:src="@{/js/search.js}"></script>
 </head>
 
 <body>
@@ -30,6 +31,8 @@
 					</div>
 				</div>
 				<div class="header-actions">
+					<!-- 이 대화에서 찾기 (search.js, Ctrl+F) -->
+					<button type="button" class="btn btn-sm" id="searchBtn" title="이 대화에서 찾기 (Ctrl+F)">검색</button>
 					<!-- 이 대화 알림 끄기/켜기 (mute.js) -->
 					<button type="button" class="btn btn-sm mute-btn" id="muteBtn" aria-haspopup="menu">알림 켜짐</button>
 					<!-- 내 목록에서만 사라짐 (sidebar.js leaveDm) -->
@@ -79,6 +82,13 @@
 			build: buildMessage
 		});
 
+
+		// ── 이 대화에서 찾기 (search.js): 오른쪽 패널, 결과를 누르면 그 메시지로 ──
+		const search = setupSearch({
+			button: el('searchBtn'), pane: document.querySelector('main.pane'),
+			searchUrl: `/api/dm/${convId}/search`, list
+		});
+
 		// ── 읽음 처리: 화면을 보고 있을 때만 ──
 		function markRead() {
 			if (client && client.connected && document.visibilityState === 'visible') {
@@ -98,6 +108,9 @@
 
 			list.append(buildMessage(m), mine, m.date);
 
+			// 검색 패널을 열어 둔 동안 검색어와 맞으면 결과 맨 위에
+			search.onMessage({id: m.id, sender: m.senderNickname, content: m.content, mentions: {}, date: m.date, time: m.time});
+
 			if (!mine) markRead();                     // 보고 있으니 바로 읽음
 		}
 
@@ -114,6 +127,7 @@
 			if (target) markDeleted(target);
 			updateQuotes(e.messageId, null);           // 이 메시지를 인용한 답장들 → "삭제된 메시지입니다"
 			composer?.cancelReplyIf(e.messageId);      // 이 메시지에 답장 쓰던 중이면 닫기
+			search.onDeleted(e.messageId);             // 검색 결과에서도 빠짐
 		}
 
 		// 수정 신호 (내 다른 탭, 상대 화면 모두): 내용 교체 + "(수정됨)", 알림·안 읽은 수는 그대로
@@ -122,6 +136,7 @@
 			const target = list.find(e.messageId);
 			if (target) markEdited(target, e.content, e.editedAt);
 			updateQuotes(e.messageId, quotePreview(e.content));   // 이 메시지를 인용한 답장들도 새 내용으로
+			search.onEdited(e.messageId, e.content);              // 검색 결과도 새 내용으로 (검색어가 빠지면 빠짐)
 		}
 
 		// 상대 접속 상태 (머리의 초록 점, "접속 중"/"오프라인")
@@ -239,6 +254,11 @@
 			c.subscribe('/user/queue/dm-reactions', f => onReactions(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-photos', f => onPhotos(JSON.parse(f.body)));
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
+			// 누가 닉네임을 바꾸거나 탈퇴 → 검색 결과의 보낸 사람 이름도
+			c.subscribe('/topic/nickname', f => {
+				const e = JSON.parse(f.body);
+				search.onRenamed(e.oldNickname, e.nickname);
+			});
 			markRead();
 			el('content')?.focus();
 		});

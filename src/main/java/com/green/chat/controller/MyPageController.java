@@ -59,7 +59,7 @@ public class MyPageController {
 			refreshLogin(updated, request, response); // 다시 로그인 안 해도 새 닉네임 적용
 			// 모든 화면의 @멘션 글자를 새 이름으로
 			messagingTemplate.convertAndSend("/topic/nickname",
-					new NicknameEvent(updated.getId(), updated.getNickname()));
+					new NicknameEvent(updated.getId(), updated.getNickname(), loginUser.getNickname()));
 			ra.addFlashAttribute("nicknameMsg", "닉네임이 변경되었습니다.");
 		} catch (IllegalArgumentException e) {
 			ra.addFlashAttribute("nicknameError", e.getMessage());
@@ -100,7 +100,7 @@ public class MyPageController {
 				new AccountEvent("회원 탈퇴가 완료되어 로그아웃되었습니다."));
 		// 모든 화면의 @멘션 글자를 "(탈퇴한 사용자)"로
 		messagingTemplate.convertAndSend("/topic/nickname",
-				new NicknameEvent(loginUser.getId(), ChatUser.WITHDRAWN_NAME));
+				new NicknameEvent(loginUser.getId(), ChatUser.WITHDRAWN_NAME, loginUser.getNickname()));
 
 		// 지금 이 브라우저: 세션 끝내기 + 로그인 유지 쿠키 지우기
 		new SecurityContextLogoutHandler().logout(request, response,

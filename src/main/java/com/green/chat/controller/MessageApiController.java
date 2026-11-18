@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.MessagePage;
+import com.green.chat.dto.SearchPage;
 import com.green.chat.security.LoginUser;
 import com.green.chat.service.ChatService;
 import com.green.chat.service.FileStorage;
@@ -41,6 +42,16 @@ public class MessageApiController {
 		this.notifier = notifier;
 		this.fileStorage = fileStorage;
 		this.mentionService = mentionService;
+	}
+
+	// GET /api/rooms/1/search?q=강아지 → 검색 결과 최신 30개 안에서, &before=351 → 이어서
+	@GetMapping("/{roomId}/search")
+	public ResponseEntity<SearchPage> search(@PathVariable Long roomId, @RequestParam(defaultValue = "") String q,
+			@RequestParam(required = false) Long before, @AuthenticationPrincipal LoginUser loginUser) {
+		if (!roomService.canJoin(roomId, loginUser.getId())) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		}
+		return ResponseEntity.ok(chatService.search(roomId, q, before));
 	}
 
 	// GET /api/rooms/1/members → 이 방에 들어와 본 회원 [{id, nickname}] (입력칸 @ 자동완성)
