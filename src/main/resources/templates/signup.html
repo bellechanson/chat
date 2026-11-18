@@ -72,45 +72,29 @@
 	<script th:inline="javascript">
 		const emailVerified = /*[[${emailVerified}]]*/ false;
 		const el = id => document.getElementById(id);
-		let timer = null;
 
+		// 이메일 인증 (api.js의 setupEmailVerify)
+		const emailVerify = setupEmailVerify({
+			purpose: 'SIGNUP',
+			sendBody: () => {
+				const email = el('email').value.trim();
+				return email ? {email} : '이메일을 입력하세요.';
+			},
+			onVerified: (r) => {
+				setHint(el('emailHint'), r.message, true);
+				lockVerified();
+			}
+		});
+
+		// 인증이 끝나면 이메일을 고정하고 [가입하기]를 켬
 		function lockVerified() {
-			if (timer) clearInterval(timer);
+			emailVerify.stop();
 			el('email').readOnly = true;
 			el('sendBtn').disabled = true;
 			el('sendBtn').textContent = '인증 완료';
 			el('codeRow').classList.add('hidden');
 			el('submitBtn').disabled = false;
 		}
-
-		el('sendBtn').onclick = async () => {
-			const email = el('email').value.trim();
-			if (!email) return setHint(el('emailHint'), '이메일을 입력하세요.', false);
-
-			el('sendBtn').disabled = true;
-			const r = await postJson('/api/email/send', {email, purpose: 'SIGNUP'});
-			setHint(el('emailHint'), r.message, r.ok);
-			if (r.ok) {
-				el('codeRow').classList.remove('hidden');
-				el('code').focus();
-				timer = cooldown(el('sendBtn'), 60, '인증번호 받기');
-			} else {
-				el('sendBtn').disabled = false;
-			}
-		};
-
-		async function verify() {
-			const r = await postJson('/api/email/verify', {
-				email: el('email').value.trim(), purpose: 'SIGNUP', code: el('code').value.trim()
-			});
-			setHint(el('emailHint'), r.message, r.ok);
-			if (r.ok) lockVerified();
-		}
-
-		el('verifyBtn').onclick = verify;
-		el('code').addEventListener('keydown', e => {
-			if (e.key === 'Enter') {e.preventDefault(); verify();}
-		});
 
 		if (emailVerified) {
 			lockVerified();

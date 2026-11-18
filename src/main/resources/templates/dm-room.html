@@ -60,6 +60,12 @@
 
 		let client = null;
 
+
+		// 보내기·반응·수정·삭제를 서버로 (messages.js의 messageActions)
+		const actions = messageActions({
+			getClient: () => client, base: `/app/dm/${convId}`, audience: '상대 화면에서도'
+		});
+
 		// ── 메시지 목록 (이전 대화 더보기, 날짜 구분선, 스크롤 → messages.js) ──
 		const list = createMessageList({
 			box: el('messages'),
@@ -137,23 +143,17 @@
 				editedAt: m.editedAt,
 				reactions: m.reactions,
 				myId,
-				onReact: canSend ? (emoji) => react(m.id, emoji) : null,   // 누구 메시지든 반응 (상대 탈퇴 시 보기만)
+				onReact: canSend ? (emoji) => actions.react(m.id, emoji) : null,   // 누구 메시지든 반응 (상대 탈퇴 시 보기만)
 				unread: mine && !m.read,                                // 상대가 안 읽은 내 메시지에 "1"
-				onEdit: mine && canSend ? (text) => editMessage(m.id, text) : null,   // 내 글 메시지만 (상대 탈퇴 시 막힘)
-				onDelete: mine ? () => deleteMessage(m.id) : null,      // DM은 내 메시지만 삭제 가능
+				onEdit: mine && canSend ? (text) => actions.edit(m.id, text) : null,   // 내 글 메시지만 (상대 탈퇴 시 막힘)
+				onDelete: mine ? () => actions.remove(m.id) : null,      // DM은 내 메시지만 삭제 가능
 				photos: m.photos,                                       // 사진 묶음
-				onDeletePhoto: mine ? (photoId) => deletePhoto(m.id, photoId) : null,   // 내 묶음에서 한 장씩
+				onDeletePhoto: mine ? (photoId) => actions.removePhoto(m.id, photoId) : null,   // 내 묶음에서 한 장씩
 				onImageLoad: list.keepBottom
 			});
 		}
 
-		function react(id, emoji) {
-			if (!client || !client.connected) return;
-			client.publish({
-				destination: `/app/dm/${convId}/react`,
-				body: JSON.stringify({id, emoji})
-			});
-		}
+
 
 		// 반응이 바뀜 (나·상대·내 다른 탭) → 그 메시지의 칩 전체를 새로 그림
 		function onReactions(e) {
@@ -162,31 +162,8 @@
 			if (target && !target.classList.contains('deleted')) setReactions(target, e.reactions);
 		}
 
-		function editMessage(id, content) {
-			if (!client || !client.connected) return;
-			client.publish({
-				destination: `/app/dm/${convId}/edit`,
-				body: JSON.stringify({id, content})
-			});
-		}
 
-		function deleteMessage(id) {
-			if (!confirm('메시지를 삭제할까요?\n상대 화면에서도 "삭제된 메시지입니다"로 바뀝니다.')) return;
-			client.publish({
-				destination: `/app/dm/${convId}/delete`,
-				body: JSON.stringify({id})
-			});
-		}
 
-		// 사진 묶음에서 한 장만 삭제 → 나와 상대 화면에서 그 사진만 빠짐 (마지막 한 장이면 메시지 삭제)
-		function deletePhoto(id, photoId) {
-			if (!client || !client.connected) return;
-			if (!confirm('이 사진만 삭제할까요?\n상대 화면에서도 이 사진이 빠집니다.')) return;
-			client.publish({
-				destination: `/app/dm/${convId}/delete-photo`,
-				body: JSON.stringify({id, photoId: Number(photoId)})
-			});
-		}
 
 		// 묶음에서 사진이 지워짐 (나·상대·내 다른 탭) → 남은 사진으로 다시 그림
 		function onPhotos(e) {
@@ -221,33 +198,8 @@
 
 		// ── 보내기 · 입력 중 신호 · 첨부 (상대가 탈퇴했으면 입력칸이 없으니 건너뜀) ──
 		if (canSend) {
-			// 내가 입력할 때 신호 보내기 (2초 간격 → messages.js)
-			const typing = watchTyping(el('content'), (on) => {
-				if (!client || !client.connected) return;
-				client.publish({
-					destination: `/app/dm/${convId}/typing`,
-					body: JSON.stringify({typing: on})
-				});
-			});
-
-			function sendMessage() {
-				const input = el('content');
-				const content = input.value.trim();
-				if (!content || !client || !client.connected) return;
-
-				client.publish({
-					destination: `/app/dm/${convId}/send`,
-					body: JSON.stringify({content})
-				});
-				input.value = '';
-				input.focus();
-				typing.sent();
-			}
-
-			el('sendBtn').onclick = sendMessage;
-			el('content').addEventListener('keydown', e => {
-				if (e.key === 'Enter' && !e.isComposing) sendMessage();
-			});
+			// 보내기 · 입력 중 신호 (messages.js의 setupComposer)
+			setupComposer({input: el('content'), sendButton: el('sendBtn'), actions});
 
 			// [첨부] 버튼, 붙여넣기, 끌어다 놓기 (files.js) — 사진은 묶음으로, 올리는 동안 상대에게 "보내는 중"
 			setupAttach({
@@ -256,13 +208,7 @@
 				textInput: el('content'),
 				uploadUrl: `/api/dm/${convId}/files`,
 				photoUrl: `/api/dm/${convId}/photos`,
-				onUploading: (photos, files) => {
-					if (!client || !client.connected) return;
-					client.publish({
-						destination: `/app/dm/${convId}/typing`,
-						body: JSON.stringify({typing: photos + files > 0, photos, files})
-					});
-				}
+				onUploading: actions.uploading
 			});
 		}
 

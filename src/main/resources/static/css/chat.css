@@ -225,16 +225,6 @@
 	color: var(--accent);
 }
 
-.bubble {
-	margin-top: 2px;
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-.msg.deleted .bubble {
-	color: #6E665D;
-	font-style: italic;
-}
 
 /* 마우스를 올리면 오른쪽 끝에 [반응] [수정] [삭제] (messages.js의 toolButton)
    버튼을 새로 붙일 때는 .msg-tool 클래스만 주면 같은 모양이 됨 */
@@ -284,11 +274,6 @@
 }
 
 /* ───── 사진 · 파일 ───── */
-.bubble.has-img,
-.bubble.has-file {
-	margin-top: 6px;
-}
-
 .att-img img {
 	display: block;
 	max-width: 280px;
@@ -1072,6 +1057,8 @@ button.react-chip:hover {
 	border-radius: 4px 14px 14px 14px;
 	background: var(--side);
 	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 .msg.tint-0 .bubble {
@@ -1115,6 +1102,7 @@ button.react-chip:hover {
 
 /* 사진 · 사진 묶음: 말풍선 없이 둥근 카드 */
 .msg .bubble.has-img {
+	margin-top: 6px;
 	padding: 0;
 	background: none;
 	border-radius: 10px;
@@ -1122,6 +1110,7 @@ button.react-chip:hover {
 
 /* 파일: 말풍선 안의 카드 */
 .msg .bubble.has-file {
+	margin-top: 6px;
 	padding: 0;
 }
 
@@ -1154,6 +1143,7 @@ button.react-chip:hover {
 .msg.deleted .bubble {
 	background: var(--side);
 	color: #6E665D;
+	font-style: italic;
 }
 
 /* 고치는 중: 말풍선 대신 입력칸 */

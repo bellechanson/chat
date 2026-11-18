@@ -107,11 +107,8 @@ public class ChatController {
 		if (user == null || request == null || request.id() == null || !roomService.canJoin(roomId, user.getId()))
 			return;
 
-		// 방장·관리자 여부 (내 것만 지우게 하려면 이 줄을 false로)
-		boolean canManage = roomService.findById(roomId)
-				.map(room -> roomService.canManage(room, user.getId(), user.isAdmin())).orElse(false);
 		try {
-			chatService.delete(roomId, request.id(), user.getNickname(), canManage);
+			chatService.delete(roomId, request.id(), user.getNickname(), canManage(roomId, user));
 		} catch (IllegalArgumentException e) {
 			log.warn("[메시지 삭제 실패] room={}, msg={}, reason={}", roomId, request.id(), e.getMessage());
 			return;
@@ -128,11 +125,9 @@ public class ChatController {
 		if (user == null || request == null || request.id() == null || !roomService.canJoin(roomId, user.getId()))
 			return;
 
-		boolean canManage = roomService.findById(roomId)
-				.map(room -> roomService.canManage(room, user.getId(), user.isAdmin())).orElse(false);
 		try {
 			ChatMessage changed = chatService.deletePhoto(roomId, request.id(), request.photoId(), user.getNickname(),
-					canManage);
+					canManage(roomId, user));
 			notifier.toRoom(roomId, changed);
 		} catch (IllegalArgumentException e) {
 			log.warn("[사진 삭제 실패] room={}, msg={}, photo={}, reason={}", roomId, request.id(), request.photoId(),
@@ -189,5 +184,11 @@ public class ChatController {
 		presenceService.kick(roomId, target);
 		notifier.toRoom(roomId, ChatMessage.of(MessageType.KICK, target, target + "님이 강퇴되었습니다."));
 		notifier.presenceChanged(roomId);
+	}
+
+	// 방장·관리자인지 (남의 메시지·사진도 지울 수 있음) — 내 것만 지우게 하려면 false를 돌려주면 됨
+	private boolean canManage(Long roomId, LoginUser user) {
+		return roomService.findById(roomId).map(room -> roomService.canManage(room, user.getId(), user.isAdmin()))
+				.orElse(false);
 	}
 }

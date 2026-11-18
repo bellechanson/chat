@@ -42,3 +42,54 @@ function setHint(el, text, ok) {
     el.textContent = text;
     el.className = 'hint ' + (ok ? 'ok' : 'err');
 }
+
+
+// ───────── 이메일 인증번호 받기 · 확인 (회원가입, 아이디 찾기, 비밀번호 재설정 공통) ─────────
+// 화면에 #email #sendBtn #codeRow #code #verifyBtn #emailHint 가 있어야 함
+//   purpose    : 'SIGNUP' / 'FIND_ID' / 'RESET_PASSWORD'
+//   sendBody   : () => 인증번호를 보낼 때 같이 보낼 값 { email, ... }, 입력이 모자라면 안내 문구(문자열)
+//   onVerified : 인증 성공 → onVerified(서버 응답) (실패 안내는 여기서 함)
+// 돌려주는 stop(): 재발송 카운트다운 멈춤 (인증이 끝났을 때)
+function setupEmailVerify({ purpose, sendBody, onVerified }) {
+    const el = id => document.getElementById(id);
+    const hint = el('emailHint');
+    let timer = null;
+
+    el('sendBtn').onclick = async () => {
+        const body = sendBody();
+        if (typeof body === 'string') return setHint(hint, body, false);
+
+        el('sendBtn').disabled = true;
+        const r = await postJson('/api/email/send', { ...body, purpose });
+        setHint(hint, r.message, r.ok);
+        if (r.ok) {
+            el('codeRow').classList.remove('hidden');
+            el('code').focus();
+            timer = cooldown(el('sendBtn'), 60, '인증번호 받기');
+        } else {
+            el('sendBtn').disabled = false;
+        }
+    };
+
+    async function verify() {
+        const r = await postJson('/api/email/verify', {
+            email: el('email').value.trim(), purpose, code: el('code').value.trim()
+        });
+        if (!r.ok) return setHint(hint, r.message, false);
+        onVerified(r);
+    }
+
+    el('verifyBtn').onclick = verify;
+    el('code').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.isComposing) {
+            e.preventDefault();
+            verify();
+        }
+    });
+
+    return {
+        stop() {
+            if (timer) clearInterval(timer);
+        }
+    };
+}

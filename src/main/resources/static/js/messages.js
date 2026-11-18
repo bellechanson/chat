@@ -607,3 +607,56 @@ function watchTyping(input, send) {
     // 메시지를 보낸 뒤 호출 → 다음에 입력을 시작하면 바로 다시 신호
     return { sent() { last = 0; } };
 }
+
+
+// ───── 서버로 보내는 메시지 동작 (채팅방, 1:1 공통) ─────
+//   getClient : () => 지금 STOMP 연결 (재연결되면 바뀌므로 함수로 받음)
+//   base      : '/app/chat/3' (채팅방) 또는 '/app/dm/3' (1:1)
+//   audience  : 삭제 확인 문구에 넣을 말 ('모든 사람의 화면에서' / '상대 화면에서도')
+// 연결이 끊겨 있으면 아무것도 안 함 (send는 보냈는지 true/false)
+function messageActions({ getClient, base, audience }) {
+    const connected = () => { const c = getClient(); return !!c && c.connected; };
+    function publish(path, body) {
+        if (!connected()) return false;
+        getClient().publish({ destination: `${base}/${path}`, body: JSON.stringify(body) });
+        return true;
+    }
+    return {
+        send: (content) => publish('send', { content }),
+        typing: (on) => publish('typing', { typing: on }),
+        // 사진·파일 올리는 중 → 상대 화면에 "○○님이 사진 12장을 보내는 중" (다 올리면 0, 0)
+        uploading: (photos, files) => publish('typing', { typing: photos + files > 0, photos, files }),
+        react: (id, emoji) => publish('react', { id, emoji }),
+        edit: (id, content) => publish('edit', { id, content }),
+        remove(id) {
+            if (!connected()) return;
+            if (!confirm(`메시지를 삭제할까요?\n${audience} "삭제된 메시지입니다"로 바뀝니다.`)) return;
+            publish('delete', { id });
+        },
+        // 사진 묶음에서 한 장만 삭제 (마지막 한 장이면 메시지 삭제)
+        removePhoto(id, photoId) {
+            if (!connected()) return;
+            if (!confirm(`이 사진만 삭제할까요?\n${audience} 이 사진이 빠집니다.`)) return;
+            publish('delete-photo', { id, photoId: Number(photoId) });
+        }
+    };
+}
+
+// ───── 입력칸: [보내기]·Enter로 보내기 + 입력 중 신호 (채팅방, 1:1 공통) ─────
+//   actions: messageActions가 돌려준 값
+function setupComposer({ input, sendButton, actions }) {
+    const typing = watchTyping(input, (on) => actions.typing(on));   // 2초 간격으로 "입력 중"
+
+    function send() {
+        const content = input.value.trim();
+        if (!content || !actions.send(content)) return;
+        input.value = '';
+        input.focus();
+        typing.sent();
+    }
+
+    sendButton.onclick = send;
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.isComposing) send();
+    });
+}
