@@ -31,6 +31,30 @@ public interface DmMessageRepository extends JpaRepository<DmMessage, Long> {
 	List<DmMessage> search(@Param("conversationId") Long conversationId, @Param("beforeId") Long beforeId,
 			@Param("no") Boolean no, @Param("pattern") String pattern, Pageable pageable);
 
+	// 사진이 있는 메시지 (모아보기, 최신순, 삭제 제외): 사진 파일 메시지 + 지우지 않은 사진이 남은 묶음
+	@Query("""
+			select m from DmMessage m
+			 where m.conversation.id = :conversationId
+			   and m.id < :beforeId
+			   and (m.deleted is null or m.deleted = :no)
+			   and (m.attachment.contentType like 'image/%'
+			        or exists (select p.id from MessagePhoto p
+			                    where p.scope = 'DM' and p.messageId = m.id
+			                      and (p.deleted is null or p.deleted = :no)))
+			 order by m.id desc
+			""")
+	List<DmMessage> findWithPhotos(@Param("conversationId") Long conversationId, @Param("beforeId") Long beforeId,
+			@Param("no") Boolean no, Pageable pageable);
+
+	// 사진 파일 메시지 수 (모아보기 전체 개수 = 이것 + 묶음 속 사진 수)
+	@Query("""
+			select count(m) from DmMessage m
+			 where m.conversation.id = :conversationId
+			   and (m.deleted is null or m.deleted = :no)
+			   and m.attachment.contentType like 'image/%'
+			""")
+	long countImageMessages(@Param("conversationId") Long conversationId, @Param("no") Boolean no);
+
 	// 이 메시지 뒤에 메시지가 더 있는지 (없으면 마지막 메시지 → 수정 시 사이드바 미리보기도 바꿈)
 	boolean existsByConversationIdAndIdGreaterThan(Long conversationId, Long id);
 

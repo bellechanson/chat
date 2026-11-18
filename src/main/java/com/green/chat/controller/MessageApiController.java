@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.ChatMessage;
+import com.green.chat.dto.MediaPage;
 import com.green.chat.dto.MessagePage;
 import com.green.chat.dto.SearchPage;
 import com.green.chat.security.LoginUser;
@@ -42,6 +43,16 @@ public class MessageApiController {
 		this.notifier = notifier;
 		this.fileStorage = fileStorage;
 		this.mentionService = mentionService;
+	}
+
+	// GET /api/rooms/1/media → 사진 모아보기 (최신순 + 전체 사진 수), &before=351 → 이어서
+	@GetMapping("/{roomId}/media")
+	public ResponseEntity<MediaPage> media(@PathVariable Long roomId, @RequestParam(required = false) Long before,
+			@AuthenticationPrincipal LoginUser loginUser) {
+		if (!roomService.canJoin(roomId, loginUser.getId())) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		}
+		return ResponseEntity.ok(chatService.media(roomId, before));
 	}
 
 	// GET /api/rooms/1/search?q=강아지 → 검색 결과 최신 30개 안에서, &before=351 → 이어서

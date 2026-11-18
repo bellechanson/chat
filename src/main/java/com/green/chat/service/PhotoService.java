@@ -11,6 +11,7 @@ import java.util.stream.IntStream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.green.chat.dto.FileDto;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.MessagePhoto;
 import com.green.chat.repository.MessagePhotoRepository;
@@ -45,6 +46,24 @@ public class PhotoService {
 				map.computeIfAbsent(p.getMessageId(), k -> new ArrayList<>()).add(p);
 		}
 		return map;
+	}
+
+	// 묶음 속 사진 수 (모아보기 전체 개수용, 지운 사진·메시지 제외)
+	public long countRoomPhotos(Long roomId) {
+		return photoRepository.countRoomPhotos(roomId, Boolean.FALSE);
+	}
+
+	public long countDmPhotos(Long conversationId) {
+		return photoRepository.countDmPhotos(conversationId, Boolean.FALSE);
+	}
+
+	// 메시지 하나의 사진들 → 모아보기용 목록 (묶음이면 남은 사진 전부, 사진 파일이면 한 장, 아니면 빈 목록)
+	public List<FileDto> photosOfMessage(String fileUrl, Attachment attachment, List<MessagePhoto> album) {
+		if (album != null && !album.isEmpty())
+			return FileDto.photos(fileUrl, album);
+		if (attachment != null && attachment.isImage())
+			return List.of(FileDto.of(attachment, fileUrl));
+		return List.of();
 	}
 
 	// 사진 묶음 메시지인지 (수정 막기용)

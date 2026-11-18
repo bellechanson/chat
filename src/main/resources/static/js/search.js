@@ -4,12 +4,14 @@
 //   pane      : 대화 화면 (main.pane) — 패널을 이 안 오른쪽에 붙임
 //   searchUrl : '/api/rooms/3/search' 또는 '/api/dm/3/search'
 //   list      : createMessageList가 돌려준 값 (결과를 누르면 jumpTo로 이동)
+//   onOpen    : 열 때 부름 (사진 모아보기 패널 닫기 — 같은 자리를 씀)
 // 돌려주는 값: 패널을 열어 둔 동안 실시간 반영
 //   onMessage({id, sender, content, mentions, date, time}) 새 메시지가 검색어와 맞으면 맨 위에 추가
 //   onEdited(id, content, mentions) 수정 → 내용 바꿈 (검색어가 빠지면 결과에서 빠짐, 새로 맞으면 추가)
 //   onDeleted(id) 삭제 → 결과에서 빠짐
 //   onRenamed(oldName, newName) 닉네임 바뀜 → 결과의 보낸 사람 이름도
-function setupSearch({ button, pane, searchUrl, list }) {
+//   close() 닫기
+function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
     const DEBOUNCE_MS = 300;
     const el = (tag, cls, text) => {
         const e = document.createElement(tag);
@@ -19,7 +21,7 @@ function setupSearch({ button, pane, searchUrl, list }) {
     };
 
     // ── 패널 만들기: 머리(검색창 · 닫기) / 결과 개수 / 결과 목록 ──
-    const panel = el('aside', 'search-panel hidden');
+    const panel = el('aside', 'pane-panel hidden');
     panel.setAttribute('aria-label', '메시지 검색');
     const head = el('div', 'search-head');
     const input = el('input', 'search-input');
@@ -48,16 +50,18 @@ function setupSearch({ button, pane, searchUrl, list }) {
     const isOpen = () => !panel.classList.contains('hidden');
 
     function open() {
+        if (onOpen) onOpen();
         panel.classList.remove('hidden');
-        pane.classList.add('searching');
+        pane.classList.add('panel-open');
         button.setAttribute('aria-expanded', 'true');
         input.focus();
         input.select();
     }
 
     function close() {
+        if (!isOpen()) return;
         panel.classList.add('hidden');
-        pane.classList.remove('searching');
+        pane.classList.remove('panel-open');
         button.setAttribute('aria-expanded', 'false');
         clearMarks(document.getElementById('messages'));   // 말풍선 속 강조도 지움
     }
@@ -205,6 +209,7 @@ function setupSearch({ button, pane, searchUrl, list }) {
     }
 
     return {
+        close,
         onMessage(m) {
             if (!isOpen() || !m.id || findHit(m.id) || !matches(m.content, m.mentions)) return;
             results.prepend(hitElement(m));

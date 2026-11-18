@@ -67,8 +67,8 @@ public record ChatMessage(MessageType type, String sender, String content, Strin
 				null, List.of(), FileDto.photos(fileUrl(e), photos), null, Map.of());
 	}
 
-	// 이 메시지의 파일 주소: /api/rooms/1/files/351 (사진 묶음은 뒤에 /photos/사진번호)
-	private static String fileUrl(ChatMessageEntity e) {
+	// 이 메시지의 파일 주소: /api/rooms/1/files/351 (사진 묶음은 뒤에 /photos/사진번호), 모아보기에서도 씀
+	public static String fileUrl(ChatMessageEntity e) {
 		return "/api/rooms/" + e.getRoom().getId() + "/files/" + e.getId();
 	}
 }

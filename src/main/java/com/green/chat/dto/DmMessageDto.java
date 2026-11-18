@@ -48,8 +48,8 @@ public record DmMessageDto(Long id, Long conversationId, Long senderId, // 내 �
 		return FileDto.photos(fileUrl(conversationId, messageId), photos);
 	}
 
-	// 이 메시지의 파일 주소: /api/dm/3/files/120 (사진 묶음은 뒤에 /photos/사진번호)
-	private static String fileUrl(Long conversationId, Long messageId) {
+	// 이 메시지의 파일 주소: /api/dm/3/files/120 (사진 묶음은 뒤에 /photos/사진번호), 모아보기에서도 씀
+	public static String fileUrl(Long conversationId, Long messageId) {
 		return "/api/dm/" + conversationId + "/files/" + messageId;
 	}
 }

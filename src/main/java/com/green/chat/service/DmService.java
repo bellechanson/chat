@@ -22,6 +22,8 @@ import com.green.chat.dto.DmEditedEvent;
 import com.green.chat.dto.DmMessageDto;
 import com.green.chat.dto.DmPage;
 import com.green.chat.dto.DmPhotosEvent;
+import com.green.chat.dto.MediaItem;
+import com.green.chat.dto.MediaPage;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.ReplyDto;
@@ -237,6 +239,31 @@ public class DmService {
 			return DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
 					reactions.getOrDefault(m.getId(), List.of()), photos.getOrDefault(m.getId(), List.of()), reply);
 		}).toList(), hasMore);
+	}
+
+	// ── 사진 모아보기 (참여자만, 최신순, 삭제 제외) — beforeId가 null이면 최신부터 + 전체 사진 수 ──
+	public MediaPage media(Long conversationId, Long userId, Long beforeId) {
+		DmConversation c = member(conversationId, userId);
+		List<DmMessage> rows = messageRepository.findWithPhotos(conversationId,
+				beforeId == null ? Long.MAX_VALUE : beforeId, Boolean.FALSE, PageRequest.of(0, MediaPage.SIZE + 1));
+		boolean hasMore = rows.size() > MediaPage.SIZE;
+		List<DmMessage> page = hasMore ? rows.subList(0, MediaPage.SIZE) : rows;
+
+		Map<Long, String> names = nicknames(c);
+		Map<Long, List<MessagePhoto>> albums = photoService.photosOf(MessageReaction.DM,
+				page.stream().map(DmMessage::getId).toList());
+		List<MediaItem> items = new ArrayList<>();
+		for (DmMessage m : page) {
+			String sender = names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME);
+			photoService
+					.photosOfMessage(DmMessageDto.fileUrl(conversationId, m.getId()), m.getAttachment(),
+							albums.get(m.getId()))
+					.forEach(p -> items.add(MediaItem.of(m.getId(), sender, p, m.getCreatedAt())));
+		}
+		Long total = beforeId != null ? null
+				: messageRepository.countImageMessages(conversationId, Boolean.FALSE)
+						+ photoService.countDmPhotos(conversationId);
+		return new MediaPage(items, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId(), total);
 	}
 
 	// ── 대화 검색 (참여자만, 최신순, 삭제된 것 제외) — beforeId: 이어서 찾을 때 그 번호보다 오래된 것 ──

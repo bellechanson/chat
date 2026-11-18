@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.ChatMessage;
+import com.green.chat.dto.MediaItem;
+import com.green.chat.dto.MediaPage;
 import com.green.chat.dto.MessagePage;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
@@ -172,6 +174,29 @@ public class ChatService {
 						mentions.getOrDefault(m.getId(), Map.of()), m.getCreatedAt()))
 				.toList();
 		return new SearchPage(hits, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId());
+	}
+
+	/**
+	 * 사진 모아보기 (최신순, 삭제 제외): 사진 파일 메시지 + 묶음 속 사진 한 장씩
+	 *
+	 * @param beforeId null이면 최신부터 (+ 전체 사진 수), 값이 있으면 그 번호보다 오래된 것 (이어서)
+	 */
+	public MediaPage media(Long roomId, Long beforeId) {
+		List<ChatMessageEntity> rows = messageRepository.findWithPhotos(roomId,
+				beforeId == null ? Long.MAX_VALUE : beforeId, Boolean.FALSE, PageRequest.of(0, MediaPage.SIZE + 1));
+		boolean hasMore = rows.size() > MediaPage.SIZE;
+		List<ChatMessageEntity> page = hasMore ? rows.subList(0, MediaPage.SIZE) : rows;
+
+		Map<Long, List<MessagePhoto>> albums = photoService.photosOf(MessageReaction.ROOM,
+				page.stream().map(ChatMessageEntity::getId).toList());
+		List<MediaItem> items = new ArrayList<>();
+		for (ChatMessageEntity m : page) {
+			photoService.photosOfMessage(ChatMessage.fileUrl(m), m.getAttachment(), albums.get(m.getId()))
+					.forEach(p -> items.add(MediaItem.of(m.getId(), m.getSender(), p, m.getCreatedAt())));
+		}
+		Long total = beforeId != null ? null
+				: messageRepository.countImageMessages(roomId, Boolean.FALSE) + photoService.countRoomPhotos(roomId);
+		return new MediaPage(items, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId(), total);
 	}
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)

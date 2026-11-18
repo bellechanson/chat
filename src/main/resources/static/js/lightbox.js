@@ -7,11 +7,12 @@
 //   · 보는 중에 새 사진이 오면 넘기기 목록·개수(3 / 6)에 바로 추가
 //   · 누가 반응을 누르거나 취소하면 크게 보기 화면의 반응도 바로 바뀜
 // 사진 묶음: 묶음 속 사진도 한 장씩 넘겨 봄 (격자에 숨은 10번째 이후 사진 포함)
+// 사진 모아보기(gallery.js)의 사진도 같은 화면으로: 모아본 사진들(.gallery-item)끼리 넘겨 봄 (반응·삭제 버튼 없음)
 
 let lbRoot = null;        // 크게 보기 화면 (처음 열 때 한 번 만듦)
-let lbBox = null;         // 사진을 고른 메시지 목록 (#messages)
+let lbBox = null;         // 사진을 고른 목록 (메시지 목록 #messages 또는 모아보기 .gallery)
 let lbCurrent = null;     // 지금 보는 사진 링크 (.att-img)
-let lbMsg = null;         // 그 사진이 있는 메시지 줄 (.msg) — 보낸 사람·시각·반응
+let lbMsg = null;         // 그 사진이 있는 줄 (.msg 또는 모아보기 칸 .gallery-item) — 보낸 사람·시각·반응
 let lbKey = null;         // 그 사진 주소 (묶음을 다시 그리거나 재연결로 목록을 다시 그려도 다시 찾기용)
 let lbOpener = null;      // 닫은 뒤 포커스를 돌려줄 사진 링크
 let lbObserver = null;
@@ -19,6 +20,7 @@ let lbScale = 1;          // 확대 배율 (1 ~ 5)
 let lbPending = false;    // 다시 그리기 예약됨 (여러 변경을 한 번에)
 const lb = {};            // 화면 요소들
 
+const LB_ITEM = '.msg, .gallery-item';   // 사진이 들어 있는 줄 (메시지, 모아보기 칸)
 const LB_MAX_SCALE = 5;
 const LB_CLICK_SCALE = 2.5;
 
@@ -28,7 +30,7 @@ function lightboxOpen() {
 
 // 목록에 있는 (삭제 안 된) 사진들, 화면 순서대로 (묶음은 묶음 안 순서대로)
 function lightboxPhotos() {
-    return [...lbBox.querySelectorAll('.msg:not(.deleted) .att-img')];
+    return [...lbBox.querySelectorAll('.msg:not(.deleted) .att-img, .gallery-item .att-img')];
 }
 
 // 주소로 사진 다시 찾기
@@ -129,7 +131,7 @@ function setLightboxScale(scale, e) {
 // 사진 하나를 보여 줌 (a: 메시지 속 사진 링크)
 function showInLightbox(a) {
     lbCurrent = a;
-    lbMsg = a.closest('.msg');
+    lbMsg = a.closest(LB_ITEM);
     lbKey = a.getAttribute('href');
     const thumb = a.querySelector('img');
     const name = thumb ? thumb.alt : '';
@@ -212,16 +214,16 @@ function refreshLightbox() {
         const again = findLightboxPhoto(lbKey);
         if (again) {
             lbCurrent = again;
-            lbMsg = again.closest('.msg');
+            lbMsg = again.closest(LB_ITEM);
             lbOpener = again;
         } else {
             const msgId = lbMsg.dataset.id;
-            const msgNow = msgId && lbBox.querySelector(`.msg[data-id="${msgId}"]`);
+            const msgNow = msgId && lbBox.querySelector(`.msg[data-id="${msgId}"], .gallery-item[data-id="${msgId}"]`);
             if (msgNow) {
                 // 메시지는 그대로 있는데 이 사진이 없음 → 삭제됨 → 닫고 안내
                 closeLightbox();
                 showLightboxToast('보던 사진이 삭제되었어요.');
-            } else if (lbBox.querySelector('.msg')) {
+            } else if (lbBox.querySelector(LB_ITEM)) {
                 closeLightbox();   // 다 불러왔는데 메시지가 없음
             }
             return;   // 목록을 불러오는 중이면 기다림
@@ -245,13 +247,13 @@ function showLightboxToast(text) {
     t._timer = setTimeout(() => t.classList.remove('on'), 2500);
 }
 
-// 메시지 속 사진 누르기 → 크게 보기 (새 사진도 따로 연결할 필요 없게 문서 전체에서 받음)
+// 메시지 속·모아보기 사진 누르기 → 크게 보기 (새 사진도 따로 연결할 필요 없게 문서 전체에서 받음)
 document.addEventListener('click', (e) => {
-    const a = e.target.closest('.msg .att-img');
+    const a = e.target.closest('.msg .att-img, .gallery-item .att-img');
     if (!a) return;
     if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;   // 새 탭으로 열기는 그대로
-    const msg = a.closest('.msg');
-    const box = a.closest('.messages');
+    const msg = a.closest(LB_ITEM);
+    const box = a.closest('.messages, .gallery');
     if (!msg || !box || msg.classList.contains('deleted')) return;
     e.preventDefault();
     openLightbox(box, a);

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.green.chat.dto.DmPage;
+import com.green.chat.dto.MediaPage;
 import com.green.chat.dto.SearchPage;
 import com.green.chat.security.LoginUser;
 import com.green.chat.service.DmNotifier;
@@ -41,6 +42,17 @@ public class DmApiController {
 			@AuthenticationPrincipal LoginUser loginUser) {
 		try {
 			return ResponseEntity.ok(dmService.messages(id, loginUser.getId(), before));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build(); // 남의 대화
+		}
+	}
+
+	// GET /api/dm/3/media → 사진 모아보기 (최신순 + 전체 사진 수), &before=120 → 이어서
+	@GetMapping("/api/dm/{id}/media")
+	public ResponseEntity<MediaPage> media(@PathVariable Long id, @RequestParam(required = false) Long before,
+			@AuthenticationPrincipal LoginUser loginUser) {
+		try {
+			return ResponseEntity.ok(dmService.media(id, loginUser.getId(), before));
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).build(); // 남의 대화
 		}
