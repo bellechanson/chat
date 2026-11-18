@@ -91,7 +91,8 @@
 
 												<!-- 관리자 지정 / 해제 -->
 												<form th:action="@{/admin/users/{id}/role(id=${u.id})}" method="post"
-													th:attr="onsubmit=|return confirm('${u.nickname}님의 권한을 변경할까요?\n변경 즉시 로그아웃됩니다.');|">
+													th:attr="data-confirm=|${u.nickname}님의 권한을 변경할까요?\n변경 즉시 로그아웃됩니다.|"
+													data-confirm-ok="변경">
 													<input type="hidden" name="q" th:value="${q}">
 													<input type="hidden" name="role"
 														th:value="${u.admin} ? 'USER' : 'ADMIN'">
@@ -108,7 +109,8 @@
 												</form>
 												<form th:if="${!u.suspended and !u.admin}"
 													th:action="@{/admin/users/{id}/suspend(id=${u.id})}" method="post"
-													th:attr="onsubmit=|return confirm('${u.nickname}님을 정지할까요?\n즉시 로그아웃되고 다시 로그인할 수 없습니다.');|">
+													th:attr="data-confirm=|${u.nickname}님을 정지할까요?\n즉시 로그아웃되고 다시 로그인할 수 없습니다.|"
+													data-confirm-ok="정지" data-danger>
 													<input type="hidden" name="q" th:value="${q}">
 													<button type="submit" class="btn btn-sm btn-danger">정지</button>
 												</form>

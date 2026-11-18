@@ -36,11 +36,11 @@ function postWithProgress(url, form, onProgress) {
             try {
                 message = JSON.parse(xhr.responseText).message;
             } catch (e) { /* 오류 화면(html)이면 기본 안내 */ }
-            alert(message || (xhr.status === 413 ? '보낼 수 있는 크기를 넘었어요.' : '파일을 보내지 못했습니다.'));
+            toast(message || (xhr.status === 413 ? '보낼 수 있는 크기를 넘었어요.' : '파일을 보내지 못했습니다.'));
             resolve(false);
         };
         xhr.onerror = () => {
-            alert('파일을 보내지 못했습니다. 연결 상태를 확인해 주세요.');
+            toast('파일을 보내지 못했습니다. 연결 상태를 확인해 주세요.');
             resolve(false);
         };
         xhr.send(form);
@@ -50,7 +50,7 @@ function postWithProgress(url, form, onProgress) {
 // 파일 하나 올리기 (사진이 아닌 파일)
 function uploadFile(url, file, onProgress) {
     if (file.size > maxUploadBytes()) {
-        alert(`${uploadMaxMb}MB 이하 파일만 보낼 수 있어요.`);
+        toast(`${uploadMaxMb}MB 이하 파일만 보낼 수 있어요.`);
         return Promise.resolve(false);
     }
     const form = new FormData();
@@ -173,7 +173,7 @@ function setupAttach({ button, input, textInput, uploadUrl, photoUrl, onUploadin
         const files = Array.from(fileList || []);
         if (!files.length) return;
         if (busy) {
-            alert('앞의 파일을 보내는 중이에요. 끝난 뒤에 다시 보내 주세요.');
+            toast('앞의 파일을 보내는 중이에요. 끝난 뒤에 다시 보내 주세요.');
             return;
         }
 
@@ -203,7 +203,7 @@ function setupAttach({ button, input, textInput, uploadUrl, photoUrl, onUploadin
             notes.push(`한 번에 ${MAX_FILES_AT_ONCE}개까지 보낼 수 있어서 앞의 ${MAX_FILES_AT_ONCE}개만 보낼게요.`);
             ok = ok.slice(0, MAX_FILES_AT_ONCE);
         }
-        if (notes.length) alert(notes.join('\n\n'));
+        if (notes.length) toast(notes.join('\n\n'));
         if (!ok.length) return;
 
         // 사진은 묶음으로, 나머지는 하나씩 (사진 주소가 없으면 사진도 하나씩)

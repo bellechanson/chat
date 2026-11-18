@@ -57,10 +57,10 @@ function setupMute({ button, scope, targetId, url }) {
                 body: JSON.stringify({ duration })
             });
             const data = await res.json();
-            if (!res.ok) return alert(data.message || '알림 설정을 바꾸지 못했어요.');
+            if (!res.ok) return toast(data.message || '알림 설정을 바꾸지 못했어요.');
             apply(data);   // 내 다른 탭에는 서버가 /user/queue/mute로 알려 줌
         } catch (e) {
-            alert('알림 설정을 바꾸지 못했어요. 새로고침 후 다시 시도해 주세요.');
+            toast('알림 설정을 바꾸지 못했어요. 새로고침 후 다시 시도해 주세요.');
         }
     }
 

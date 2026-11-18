@@ -743,15 +743,17 @@ function messageActions({ getClient, base, audience }) {
         uploading: (photos, files) => publish('typing', { typing: photos + files > 0, photos, files }),
         react: (id, emoji) => publish('react', { id, emoji }),
         edit: (id, content) => publish('edit', { id, content }),
-        remove(id) {
+        async remove(id) {
             if (!connected()) return;
-            if (!confirm(`메시지를 삭제할까요?\n${audience} "삭제된 메시지입니다"로 바뀝니다.`)) return;
+            if (!await askConfirm(`메시지를 삭제할까요?\n${audience} "삭제된 메시지입니다"로 바뀝니다.`,
+                { ok: '삭제', danger: true })) return;   // dialog.js
             publish('delete', { id });
         },
         // 사진 묶음에서 한 장만 삭제 (마지막 한 장이면 메시지 삭제)
-        removePhoto(id, photoId) {
+        async removePhoto(id, photoId) {
             if (!connected()) return;
-            if (!confirm(`이 사진만 삭제할까요?\n${audience} 이 사진이 빠집니다.`)) return;
+            if (!await askConfirm(`이 사진만 삭제할까요?\n${audience} 이 사진이 빠집니다.`,
+                { ok: '삭제', danger: true })) return;   // dialog.js
             publish('delete-photo', { id, photoId: Number(photoId) });
         }
     };

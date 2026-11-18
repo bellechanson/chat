@@ -53,7 +53,8 @@
 										<td class="muted" th:text="${r.createdAt}">2026-11-13</td>
 										<td class="num">
 											<form th:action="@{/admin/rooms/{id}/delete(id=${r.id})}" method="post"
-												onsubmit="return confirm('이 방을 삭제할까요?\n모든 대화가 함께 삭제됩니다.');">
+												data-confirm="이 방을 삭제할까요?\n모든 대화가 함께 삭제됩니다." data-confirm-ok="삭제"
+												data-danger>
 												<button type="submit" class="btn btn-sm btn-danger">삭제</button>
 											</form>
 										</td>
@@ -86,7 +87,8 @@
 										<td class="muted" th:text="${b.createdAt}">2026-11-13</td>
 										<td class="num">
 											<form th:action="@{/admin/bans/{id}/delete(id=${b.id})}" method="post"
-												onsubmit="return confirm('강퇴를 해제할까요?\n이 사용자는 다시 방에 들어갈 수 있습니다.');">
+												data-confirm="강퇴를 해제할까요?\n이 사용자는 다시 방에 들어갈 수 있습니다."
+												data-confirm-ok="해제">
 												<button type="submit" class="btn btn-sm">해제</button>
 											</form>
 										</td>

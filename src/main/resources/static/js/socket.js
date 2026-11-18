@@ -36,7 +36,7 @@ function watchAccount(client) {
         try {
             await client.deactivate();
         } catch (e) { /* 이미 끊겼으면 무시 */ }
-        alert(event.message);
+        await showAlert(event.message);   // dialog.js — [확인]을 누르면 로그인 화면으로
         location.href = '/login?expired';
     });
 }
@@ -116,11 +116,11 @@ function notifyLabel() {
 // 메뉴의 "데스크톱 알림" 누르면: 처음엔 허용 요청, 그다음부터는 켜기/끄기
 async function toggleNotify() {
     if (!notifySupported()) {
-        alert('이 브라우저는 데스크톱 알림을 지원하지 않습니다.');
+        toast('이 브라우저는 데스크톱 알림을 지원하지 않습니다.');
         return;
     }
     if (Notification.permission === 'denied') {
-        alert('알림이 차단되어 있습니다.\n'
+        toast('알림이 차단되어 있습니다.\n'
             + '주소창 왼쪽의 사이트 정보 아이콘(앱이면 오른쪽 위 ⋯ 메뉴 → 앱 정보)에서\n'
             + '알림을 "허용"으로 바꾼 뒤 새로고침해 주세요.');
         return;

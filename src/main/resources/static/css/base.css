@@ -725,3 +725,118 @@ select {
 .ctx-menu button.danger:focus-visible {
 	background: var(--danger-soft);
 }
+
+
+
+/* ───── 앱 안 확인창 · 토스트 (dialog.js) ───── */
+.dlg-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+	background: rgba(31, 27, 23, .45);
+	animation: dlg-fade .12s ease-out;
+}
+
+.dlg {
+	width: 100%;
+	max-width: 400px;
+	padding: 24px 24px 18px;
+	border-radius: 14px;
+	background: #FFFFFF;
+	box-shadow: 0 20px 50px rgba(0, 0, 0, .25);
+	animation: dlg-pop .14s ease-out;
+}
+
+.dlg-msg {
+	margin: 0 0 20px;
+	color: var(--ink);
+	font-size: 15px;
+	line-height: 1.6;
+	white-space: pre-line;
+	word-break: keep-all;
+	overflow-wrap: anywhere;
+}
+
+/* 첫 줄(질문)은 굵게 */
+.dlg-msg::first-line {
+	font-weight: 700;
+}
+
+.dlg-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.dlg-actions .btn {
+	min-width: 72px;
+}
+
+/* 되돌릴 수 없는 일의 확인 버튼 */
+.dlg-danger {
+	border-color: var(--danger);
+	background: var(--danger);
+	color: #FFFFFF;
+}
+
+.dlg-danger:hover {
+	background: #9A1C13;
+}
+
+@keyframes dlg-fade {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes dlg-pop {
+	from {
+		opacity: 0;
+		transform: scale(.96);
+	}
+}
+
+.toast-stack {
+	position: fixed;
+	left: 50%;
+	bottom: 32px;
+	z-index: 1100;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	transform: translateX(-50%);
+	pointer-events: none;
+}
+
+.toast {
+	max-width: min(480px, calc(100vw - 48px));
+	padding: 12px 18px;
+	border-radius: 10px;
+	background: var(--ink);
+	color: #FFFFFF;
+	font-size: 14px;
+	line-height: 1.5;
+	white-space: pre-line;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+	pointer-events: auto;
+	cursor: pointer;
+	animation: toast-in .18s ease-out;
+	transition: opacity .2s, transform .2s;
+}
+
+.toast.out {
+	opacity: 0;
+	transform: translateY(8px);
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+}

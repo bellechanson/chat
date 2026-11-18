@@ -105,10 +105,10 @@ function removeSideDm(convId) {
 // ───── 1:1 대화방 나가기 ─────
 // 내 목록에서만 사라지고 상대에게는 알리지 않음. 상대가 다시 보내면 이전 대화와 함께 다시 나타남
 //   (대화 화면 머리의 [나가기] 버튼도 이 함수를 씀)
-function leaveDm(convId, partnerName) {
-    const ok = confirm(`${partnerName || '이'}님과의 대화방에서 나갈까요?\n\n`
+async function leaveDm(convId, partnerName) {
+    const ok = await askConfirm(`${partnerName || '이'}님과의 대화방에서 나갈까요?\n\n`
         + '· 내 대화 목록에서만 사라지고, 상대에게는 알리지 않아요.\n'
-        + '· 상대가 다시 메시지를 보내면 이전 대화와 함께 다시 나타나요.');
+        + '· 상대가 다시 메시지를 보내면 이전 대화와 함께 다시 나타나요.', { ok: '나가기' });   // dialog.js
     if (!ok) return;
 
     const form = document.getElementById('dmLeaveForm');

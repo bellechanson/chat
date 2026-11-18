@@ -37,7 +37,8 @@
 					<button type="button" class="btn btn-sm" id="usersBtn" aria-expanded="false"
 						aria-controls="usersPop">접속자 <span id="userCount">0</span></button>
 					<form id="deleteForm" th:if="${canManage}" th:action="@{/rooms/{id}/delete(id=${room.id})}"
-						method="post">
+						method="post" data-confirm="방을 삭제할까요?\n모든 대화 내용이 함께 삭제되며 되돌릴 수 없습니다." data-confirm-ok="삭제"
+						data-danger>
 						<button type="submit" class="btn btn-sm btn-danger">방 삭제</button>
 					</form>
 					<div class="users-pop hidden" id="usersPop">
@@ -150,7 +151,7 @@
 			if (leaving) return;
 			leaving = true;
 			await leave();
-			alert(text);
+			await showAlert(text);   // dialog.js — [확인]을 누르면 이동
 			location.href = url;
 		}
 
@@ -198,7 +199,7 @@
 
 		// 답장 인용을 누름 → 원래 메시지로 이동 (예전 메시지면 더 불러오며 찾음)
 		async function jumpTo(id) {
-			if (!await list.jumpTo(id)) alert('원래 메시지를 찾을 수 없어요.');
+			if (!await list.jumpTo(id)) toast('원래 메시지를 찾을 수 없어요.');
 		}
 
 
@@ -312,8 +313,9 @@
 		closeOnOutside(el('usersPop'), () => setUsersOpen(false),
 			{ignore: t => el('usersBtn').contains(t)});   // [접속자] 버튼은 직접 열고 닫음
 
-		function kick(name) {
-			if (!confirm(`${name}님을 강퇴할까요?\n강퇴되면 이 방에 다시 들어올 수 없습니다.`)) return;
+		async function kick(name) {
+			if (!await askConfirm(`${name}님을 강퇴할까요?\n강퇴되면 이 방에 다시 들어올 수 없습니다.`,
+				{ok: '강퇴', danger: true})) return;   // dialog.js
 			client.publish({
 				destination: `/app/chat/${roomId}/kick`,
 				body: JSON.stringify({target: name})
@@ -367,11 +369,8 @@
 
 		const deleteForm = el('deleteForm');
 		if (deleteForm) {
-			deleteForm.addEventListener('submit', (e) => {
-				if (!confirm('방을 삭제할까요?\n모든 대화 내용이 함께 삭제되며 되돌릴 수 없습니다.')) {
-					e.preventDefault();
-					return;
-				}
+			// 확인(data-confirm, dialog.js)을 받은 뒤에만 불림 → 나가는 중 표시
+			deleteForm.addEventListener('submit', () => {
 				leaving = true;
 			});
 		}

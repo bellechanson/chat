@@ -17,6 +17,7 @@
 		<title th:text="${#strings.isEmpty(title)} ? '실시간 채팅' : ${title} + ' - 실시간 채팅'">실시간 채팅</title>
 		<link rel="manifest" href="/manifest.json">
 		<link rel="stylesheet" th:href="@{/css/base.css}">
+		<script th:src="@{/js/dialog.js}"></script>
 		<script th:src="@{/js/pwa.js}" defer></script>
 	</th:block>
 

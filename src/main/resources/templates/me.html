@@ -124,7 +124,8 @@
 								<li>보낸 메시지는 지워지지 않고 <strong>(탈퇴한 사용자)</strong>로 표시돼요.</li>
 								<li>같은 아이디·닉네임·이메일로 새로 가입할 수 있어요.</li>
 							</ul>
-							<form th:action="@{/me/withdraw}" method="post" class="stack" id="withdrawForm">
+							<form th:action="@{/me/withdraw}" method="post" class="stack" id="withdrawForm"
+								data-confirm="정말 탈퇴할까요?\n탈퇴하면 되돌릴 수 없어요." data-confirm-ok="탈퇴" data-danger>
 								<div>
 									<label for="withdrawPassword" class="form-label">비밀번호 확인</label>
 									<input class="field" type="password" id="withdrawPassword" name="password"
@@ -173,13 +174,9 @@
 		// 접속 상태 유지 + 사이드바 실시간 + 계정 변경 알림
 		const meClient = connectSocket();
 
-		// 회원 탈퇴: 한 번 더 확인. 보내기 전에 실시간 연결을 끊어서
+		// 회원 탈퇴: 한 번 더 확인(data-confirm, dialog.js)을 받은 뒤 보내기 전에 실시간 연결을 끊어서
 		//   (서버가 보내는 "탈퇴로 로그아웃" 알림은 다른 탭용 → 이 화면에는 안 뜨게)
-		document.getElementById('withdrawForm').addEventListener('submit', (e) => {
-			if (!confirm('정말 탈퇴할까요?\n탈퇴하면 되돌릴 수 없어요.')) {
-				e.preventDefault();
-				return;
-			}
+		document.getElementById('withdrawForm').addEventListener('submit', () => {
 			try {
 				meClient?.deactivate();
 			} catch (err) { /* 이미 끊겼으면 무시 */}

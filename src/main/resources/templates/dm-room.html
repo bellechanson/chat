@@ -190,7 +190,7 @@
 
 		// 답장 인용을 누름 → 원래 메시지로 이동 (예전 메시지면 더 불러오며 찾음)
 		async function jumpTo(id) {
-			if (!await list.jumpTo(id)) alert('원래 메시지를 찾을 수 없어요.');
+			if (!await list.jumpTo(id)) toast('원래 메시지를 찾을 수 없어요.');
 		}
 
 
