@@ -1053,3 +1053,10 @@ button.react-chip:hover {
 		transition: none;
 	}
 }
+
+/* 방 알림 끄기 버튼 (mute.js): 꺼져 있으면 회색 */
+.mute-btn.muted {
+	background: var(--side);
+	color: var(--muted);
+	font-weight: 500;
+}

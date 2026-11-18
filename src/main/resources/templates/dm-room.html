@@ -10,6 +10,7 @@
 	<script th:src="@{/js/lightbox.js}"></script>
 	<script th:src="@{/js/api.js}"></script>
 	<script th:src="@{/js/files.js}"></script>
+	<script th:src="@{/js/mute.js}"></script>
 </head>
 
 <body>
@@ -29,6 +30,8 @@
 					</div>
 				</div>
 				<div class="header-actions">
+					<!-- 이 대화 알림 끄기/켜기 (mute.js) -->
+					<button type="button" class="btn btn-sm mute-btn" id="muteBtn" aria-haspopup="menu">알림 켜짐</button>
 					<!-- 내 목록에서만 사라짐 (sidebar.js leaveDm) -->
 					<button type="button" class="btn btn-sm" id="leaveBtn">대화방 나가기</button>
 				</div>
@@ -263,8 +266,12 @@
 			});
 		}
 
+		// ── 이 대화 알림 끄기 (mute.js) ──
+		const mute = setupMute({button: el('muteBtn'), scope: 'DM', targetId: convId, url: `/api/dm/${convId}/mute`});
+
 		// ── 실시간 연결 ──
 		client = connectSocket(async (c) => {
+			mute.watch(c);
 			await list.loadFirst();
 			c.subscribe('/user/queue/dm', f => onMessage(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-read', f => onRead(JSON.parse(f.body)));

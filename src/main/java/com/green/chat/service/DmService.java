@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -183,8 +184,21 @@ public class DmService {
 				}).toList();
 	}
 
-	public long totalUnread(Long userId) {
-		return messageRepository.countAllUnread(userId, Boolean.TRUE);
+	// 전체 안 읽은 수 (앱 아이콘 뱃지용) — 알림을 꺼 둔 대화는 뺌
+	public long totalUnread(Long userId, Set<Long> mutedConversations) {
+		long total = messageRepository.countAllUnread(userId, Boolean.TRUE); // 나간 대화는 이미 빠져 있음
+		if (mutedConversations.isEmpty())
+			return total;
+
+		// 꺼 둔 대화 중 나가지 않은 것만 빼야 함 (나간 대화는 위 합계에 없으니까)
+		Set<Long> counted = conversationRepository.findAllById(mutedConversations).stream()
+				.filter(c -> c.isMember(userId) && !c.isHiddenFor(userId)).map(DmConversation::getId)
+				.collect(Collectors.toSet());
+		for (Object[] row : messageRepository.countUnreadByUser(userId)) {
+			if (counted.contains((Long) row[0]))
+				total -= (Long) row[1];
+		}
+		return total;
 	}
 
 	// ── 이전 대화 (커서 페이징) ──

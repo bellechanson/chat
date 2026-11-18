@@ -79,6 +79,7 @@ function watchBadge(client, excludeRoomId) {
     client.subscribe('/topic/rooms/activity', scheduleBadge);  // 채팅방 새 메시지
     client.subscribe('/user/queue/dm', scheduleBadge);         // DM 새 메시지
     client.subscribe('/user/queue/dm-read', scheduleBadge);    // DM 읽음 처리
+    client.subscribe('/user/queue/mute', scheduleBadge);       // 방 알림 끄기/켜기 (꺼 둔 방은 셈에서 빠짐)
     refreshBadge();
 }
 

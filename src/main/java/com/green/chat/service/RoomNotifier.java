@@ -1,5 +1,6 @@
 package com.green.chat.service;
 
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.messaging.simp.SimpMessageSendingOperations;
@@ -24,12 +25,14 @@ public class RoomNotifier {
 	private final SimpMessageSendingOperations messagingTemplate;
 	private final PresenceService presenceService;
 	private final RoomService roomService;
+	private final MuteService muteService;
 
 	public RoomNotifier(SimpMessageSendingOperations messagingTemplate, PresenceService presenceService,
-			RoomService roomService) {
+			RoomService roomService, MuteService muteService) {
 		this.messagingTemplate = messagingTemplate;
 		this.presenceService = presenceService;
 		this.roomService = roomService;
+		this.muteService = muteService;
 	}
 
 	// 방 안의 모든 사람에게 (대화, 입장/퇴장, 강퇴, 삭제 알림)
@@ -71,13 +74,16 @@ public class RoomNotifier {
 				new RoomTypingEvent(nickname, typing, photos, files));
 	}
 
-	// 새 메시지 → 이 방에 들어와 본 회원들에게 데스크톱 알림 (보낸 사람 제외)
+	// 새 메시지 → 이 방에 들어와 본 회원들에게 데스크톱 알림 (보낸 사람, 이 방 알림을 꺼 둔 사람 제외)
 	private void notifyMembers(Long roomId, Long senderId, ChatMessage message) {
 		RoomService.NotifyTargets targets = roomService.notifyTargets(roomId, senderId);
+		Set<String> muted = muteService.mutedUsernames(MuteService.ROOM, roomId);
 		NotifyEvent event = new NotifyEvent(targets.roomName(),
 				message.sender() + ": " + Formats.preview(message.content()), "/rooms/" + roomId, "room-" + roomId,
 				message.id());
 		for (String username : targets.usernames()) {
+			if (muted.contains(username))
+				continue;
 			messagingTemplate.convertAndSendToUser(username, "/queue/notify", event);
 		}
 	}

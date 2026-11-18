@@ -12,9 +12,11 @@ import com.green.chat.util.Formats;
 public class DmNotifier {
 
 	private final SimpMessageSendingOperations messagingTemplate;
+	private final MuteService muteService;
 
-	public DmNotifier(SimpMessageSendingOperations messagingTemplate) {
+	public DmNotifier(SimpMessageSendingOperations messagingTemplate, MuteService muteService) {
 		this.messagingTemplate = messagingTemplate;
+		this.muteService = muteService;
 	}
 
 	public void messageSent(String myUsername, String myNickname, DmService.Sent sent) {
@@ -26,6 +28,9 @@ public class DmNotifier {
 			return;
 
 		messagingTemplate.convertAndSendToUser(sent.partnerUsername(), "/queue/dm", m);
+		// 상대가 이 대화 알림을 꺼 뒀으면 데스크톱 알림은 보내지 않음 (메시지는 위에서 이미 보냄)
+		if (muteService.mutedUsernames(MuteService.DM, m.conversationId()).contains(sent.partnerUsername()))
+			return;
 		// 상대에게 데스크톱 알림 (같은 대화는 한 칸에서 교체)
 		messagingTemplate.convertAndSendToUser(sent.partnerUsername(), "/queue/notify", new NotifyEvent(myNickname,
 				Formats.preview(m.content()), "/dm/" + m.conversationId(), "dm-" + m.conversationId(), m.id()));
