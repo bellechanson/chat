@@ -11,6 +11,7 @@
 	<script th:src="@{/js/api.js}"></script>
 	<script th:src="@{/js/files.js}"></script>
 	<script th:src="@{/js/mute.js}"></script>
+	<script th:src="@{/js/panel.js}"></script>
 	<script th:src="@{/js/search.js}"></script>
 	<script th:src="@{/js/gallery.js}"></script>
 </head>
@@ -89,15 +90,13 @@
 		// ── 이 대화에서 찾기 (search.js): 오른쪽 패널, 결과를 누르면 그 메시지로 ──
 		const search = setupSearch({
 			button: el('searchBtn'), pane: document.querySelector('main.pane'),
-			searchUrl: `/api/dm/${convId}/search`, list,
-			onOpen: () => gallery.close()   // 사진 모아보기와 같은 자리
+			searchUrl: `/api/dm/${convId}/search`, list
 		});
 
 		// ── 사진 모아보기 (gallery.js): 오른쪽 패널, 누르면 크게 보기 ──
 		const gallery = setupGallery({
 			button: el('galleryBtn'), pane: document.querySelector('main.pane'),
-			mediaUrl: `/api/dm/${convId}/media`,
-			onOpen: () => search.close()
+			mediaUrl: `/api/dm/${convId}/media`
 		});
 
 		// ── 읽음 처리: 화면을 보고 있을 때만 ──

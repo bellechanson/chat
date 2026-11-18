@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,6 +33,7 @@ import com.green.chat.entity.MessageReaction;
 import com.green.chat.repository.ChatMessageRepository;
 import com.green.chat.repository.ChatRoomRepository;
 import com.green.chat.util.Formats;
+import com.green.chat.util.Paging;
 
 @Service
 @Transactional(readOnly = true)
@@ -158,12 +158,11 @@ public class ChatService {
 		List<Long> userIds = name.isEmpty() ? List.of()
 				: mentionService.members(roomId).stream().filter(m -> m.nickname().toLowerCase().contains(name))
 						.map(MentionService.Member::id).toList();
-		List<ChatMessageEntity> rows = messageRepository.search(roomId, beforeId == null ? Long.MAX_VALUE : beforeId,
-				Boolean.FALSE, Formats.likePattern(q), userIds.isEmpty() ? List.of(-1L) : userIds,
-				PageRequest.of(0, SearchPage.SIZE + 1));
-
-		boolean hasMore = rows.size() > SearchPage.SIZE;
-		List<ChatMessageEntity> page = hasMore ? rows.subList(0, SearchPage.SIZE) : rows;
+		Paging.Chunk<ChatMessageEntity> chunk = Paging.cut(
+				messageRepository.search(roomId, Paging.before(beforeId), Boolean.FALSE, Formats.likePattern(q),
+						userIds.isEmpty() ? List.of(-1L) : userIds, Paging.plusOne(SearchPage.SIZE)),
+				SearchPage.SIZE, ChatMessageEntity::getId);
+		List<ChatMessageEntity> page = chunk.page();
 		Map<Long, Map<Long, String>> mentions = mentionService.mentionsOf(page);
 		String lower = q.toLowerCase();
 		List<SearchHit> hits = page.stream()
@@ -173,7 +172,7 @@ public class ChatService {
 				.map(m -> SearchHit.of(m.getId(), m.getSender(), m.getContent(),
 						mentions.getOrDefault(m.getId(), Map.of()), m.getCreatedAt()))
 				.toList();
-		return new SearchPage(hits, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId());
+		return new SearchPage(hits, chunk.hasMore(), chunk.nextBefore());
 	}
 
 	/**
@@ -182,10 +181,10 @@ public class ChatService {
 	 * @param beforeId null이면 최신부터 (+ 전체 사진 수), 값이 있으면 그 번호보다 오래된 것 (이어서)
 	 */
 	public MediaPage media(Long roomId, Long beforeId) {
-		List<ChatMessageEntity> rows = messageRepository.findWithPhotos(roomId,
-				beforeId == null ? Long.MAX_VALUE : beforeId, Boolean.FALSE, PageRequest.of(0, MediaPage.SIZE + 1));
-		boolean hasMore = rows.size() > MediaPage.SIZE;
-		List<ChatMessageEntity> page = hasMore ? rows.subList(0, MediaPage.SIZE) : rows;
+		Paging.Chunk<ChatMessageEntity> chunk = Paging.cut(messageRepository.findWithPhotos(roomId,
+				Paging.before(beforeId), Boolean.FALSE, Paging.plusOne(MediaPage.SIZE)), MediaPage.SIZE,
+				ChatMessageEntity::getId);
+		List<ChatMessageEntity> page = chunk.page();
 
 		Map<Long, List<MessagePhoto>> albums = photoService.photosOf(MessageReaction.ROOM,
 				page.stream().map(ChatMessageEntity::getId).toList());
@@ -196,7 +195,7 @@ public class ChatService {
 		}
 		Long total = beforeId != null ? null
 				: messageRepository.countImageMessages(roomId, Boolean.FALSE) + photoService.countRoomPhotos(roomId);
-		return new MediaPage(items, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId(), total);
+		return new MediaPage(items, chunk.hasMore(), chunk.nextBefore(), total);
 	}
 
 	// 내려받을 파일 (이 방의, 삭제 안 된 파일 메시지만)

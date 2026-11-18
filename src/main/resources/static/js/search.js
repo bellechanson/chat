@@ -1,44 +1,39 @@
 // ───────── 메시지 검색: 오른쪽 검색 패널 (채팅방 chat.html, 1:1 dm-room.html) ─────────
-// messages.js(fillContent, plainContent, createMessageList의 jumpTo·find) 다음에 불러옴
+// messages.js(fillContent, plainContent, createMessageList의 jumpTo·find) · panel.js(createPanel) 다음에 불러옴
 //   button    : 머리글 [검색] 버튼 (Ctrl+F로도 열림)
 //   pane      : 대화 화면 (main.pane) — 패널을 이 안 오른쪽에 붙임
 //   searchUrl : '/api/rooms/3/search' 또는 '/api/dm/3/search'
 //   list      : createMessageList가 돌려준 값 (결과를 누르면 jumpTo로 이동)
-//   onOpen    : 열 때 부름 (사진 모아보기 패널 닫기 — 같은 자리를 씀)
 // 돌려주는 값: 패널을 열어 둔 동안 실시간 반영
 //   onMessage({id, sender, content, mentions, date, time}) 새 메시지가 검색어와 맞으면 맨 위에 추가
 //   onEdited(id, content, mentions) 수정 → 내용 바꿈 (검색어가 빠지면 결과에서 빠짐, 새로 맞으면 추가)
 //   onDeleted(id) 삭제 → 결과에서 빠짐
 //   onRenamed(oldName, newName) 닉네임 바뀜 → 결과의 보낸 사람 이름도
 //   close() 닫기
-function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
+function setupSearch({ button, pane, searchUrl, list }) {
     const DEBOUNCE_MS = 300;
-    const el = (tag, cls, text) => {
-        const e = document.createElement(tag);
-        if (cls) e.className = cls;
-        if (text != null) e.textContent = text;
-        return e;
-    };
+    const el = makeEl;   // panel.js
 
-    // ── 패널 만들기: 머리(검색창 · 닫기) / 결과 개수 / 결과 목록 ──
-    const panel = el('aside', 'pane-panel hidden');
-    panel.setAttribute('aria-label', '메시지 검색');
+    // ── 패널 만들기 (panel.js): 머리(검색창 · 닫기) / 결과 개수 / 결과 목록 ──
+    const { panel, isOpen, open, close, closeButton } = createPanel({
+        button, pane, label: '메시지 검색',
+        onOpen: () => {
+            input.focus();
+            input.select();
+        },
+        onClose: () => clearMarks(document.getElementById('messages'))   // 말풍선 속 강조도 지움
+    });
     const head = el('div', 'search-head');
     const input = el('input', 'search-input');
     input.type = 'search';
     input.placeholder = '이 대화에서 찾기';
     input.maxLength = 50;
     input.setAttribute('aria-label', '검색어');
-    const closeBtn = el('button', 'icon-btn sm search-close', '✕');
-    closeBtn.type = 'button';
-    closeBtn.title = '닫기 (Esc)';
-    closeBtn.setAttribute('aria-label', '검색 닫기');
-    head.append(input, closeBtn);
+    head.append(input, closeButton('검색 닫기'));
     const status = el('div', 'search-status');
     status.setAttribute('aria-live', 'polite');
     const results = el('ul', 'search-results');
     panel.append(head, status, results);
-    pane.appendChild(panel);
 
     let query = '';          // 지금 결과의 검색어
     let nextBefore = null;   // 이어서 찾을 때 기준 번호
@@ -46,25 +41,6 @@ function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
     let loading = false;
     let seq = 0;             // 늦게 온 예전 검색 결과는 버림
     let timer = null;
-
-    const isOpen = () => !panel.classList.contains('hidden');
-
-    function open() {
-        if (onOpen) onOpen();
-        panel.classList.remove('hidden');
-        pane.classList.add('panel-open');
-        button.setAttribute('aria-expanded', 'true');
-        input.focus();
-        input.select();
-    }
-
-    function close() {
-        if (!isOpen()) return;
-        panel.classList.add('hidden');
-        pane.classList.remove('panel-open');
-        button.setAttribute('aria-expanded', 'false');
-        clearMarks(document.getElementById('messages'));   // 말풍선 속 강조도 지움
-    }
 
     // ── 검색 ──
     async function search(q, more = false) {
@@ -117,7 +93,7 @@ function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
         btn.type = 'button';
         const top = el('span', 'hit-head');
         const who = el('strong', 'hit-who', hit.sender);
-        const when = el('span', 'hit-time', dateLabel(hit.date, hit.time));
+        const when = el('span', 'hit-time', dateTimeLabel(hit.date, hit.time, true));   // panel.js
         top.append(who, when);
         const text = el('span', 'hit-text');
         btn.append(top, text);
@@ -132,14 +108,6 @@ function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
         fillContent(text, li._hit.content, li._hit.mentions || {});   // @멘션 강조·링크 (messages.js)
         text.querySelectorAll('a').forEach(a => a.replaceWith(a.textContent));   // 결과 안에선 링크 대신 글자
         markText(text, query);
-    }
-
-    // "2026-11-18" + "14:30" → "11월 18일 14:30" (올해가 아니면 "2025년 11월 18일 14:30")
-    function dateLabel(date, time) {
-        if (!date) return time || '';
-        const [y, m, d] = date.split('-').map(Number);
-        const year = y !== new Date().getFullYear() ? `${y}년 ` : '';
-        return `${year}${m}월 ${d}일 ${time || ''}`.trim();
     }
 
     // 화면에 보이는 글자에 검색어가 있는지 (대소문자 무시, 멘션은 "@이름"으로)
@@ -158,10 +126,7 @@ function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
         results.querySelector(`.search-hit[data-id="${id}"]`)?.classList.add('on');
     }
 
-    // ── 이벤트 ──
-    button.setAttribute('aria-expanded', 'false');
-    button.addEventListener('click', () => (isOpen() ? close() : open()));
-    closeBtn.addEventListener('click', close);
+    // ── 이벤트 (버튼 여닫기 · ✕ · Esc는 panel.js) ──
     input.addEventListener('input', () => {
         clearTimeout(timer);
         timer = setTimeout(() => search(input.value.trim()), DEBOUNCE_MS);
@@ -170,9 +135,6 @@ function setupSearch({ button, pane, searchUrl, list, onOpen = null }) {
         if (e.key === 'Enter' && !e.isComposing) {
             clearTimeout(timer);
             search(input.value.trim());
-        } else if (e.key === 'Escape') {
-            e.preventDefault();
-            close();
         }
     });
     results.addEventListener('scroll', () => {   // 아래 끝 근처 → 더 오래된 결과

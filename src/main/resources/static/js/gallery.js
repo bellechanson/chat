@@ -1,9 +1,8 @@
 // ───────── 사진 모아보기: 오른쪽 패널 (채팅방 chat.html, 1:1 dm-room.html) ─────────
-// files.js(fileElement) · lightbox.js(크게 보기) 다음에 불러옴
+// files.js(fileElement) · lightbox.js(크게 보기) · panel.js(createPanel) 다음에 불러옴
 //   button   : 머리글 [사진] 버튼
 //   pane     : 대화 화면 (main.pane) — 패널을 이 안 오른쪽에 붙임 (검색 패널과 같은 자리)
 //   mediaUrl : '/api/rooms/3/media' 또는 '/api/dm/3/media'
-//   onOpen   : 열 때 부름 (검색 패널 닫기)
 // 사진을 누르면 크게 보기 → 모아본 사진들을 ←/→로 넘겨 봄 (lightbox.js가 .gallery 안의 .att-img를 넘김)
 // 돌려주는 값: 패널을 열어 둔 동안 실시간 반영
 //   onMessage({id, sender, date, time, file, photos}) 새 사진(사진 파일·묶음) → 맨 위에
@@ -11,55 +10,33 @@
 //   onPhotosChanged(id, photos) 묶음에서 한 장 삭제 → 남은 사진만
 //   onRenamed(oldName, newName) 닉네임 바뀜 → 크게 보기에 나오는 보낸 사람 이름도
 //   close() 닫기
-function setupGallery({ button, pane, mediaUrl, onOpen = null }) {
-    const el = (tag, cls, text) => {
-        const e = document.createElement(tag);
-        if (cls) e.className = cls;
-        if (text != null) e.textContent = text;
-        return e;
-    };
+function setupGallery({ button, pane, mediaUrl }) {
+    const el = makeEl;   // panel.js
 
-    // ── 패널: 머리(사진 128 · 닫기) / 상태 안내 / 월별 격자 ──
-    const panel = el('aside', 'pane-panel hidden');
-    panel.setAttribute('aria-label', '사진 모아보기');
+    // ── 패널 (panel.js): 머리(사진 128 · 닫기) / 상태 안내 / 월별 격자 ──
+    const { panel, isOpen, close, closeButton } = createPanel({
+        button, pane, label: '사진 모아보기',
+        onOpen: () => {
+            closeBtn.focus();
+            load(false);   // 열 때마다 새로 (닫혀 있던 동안 바뀐 것까지)
+        }
+    });
     const head = el('div', 'panel-head');
     const title = el('h2', 'panel-title', '사진');
     const count = el('span', 'panel-count');
     title.appendChild(count);
-    const closeBtn = el('button', 'icon-btn sm', '✕');
-    closeBtn.type = 'button';
-    closeBtn.title = '닫기 (Esc)';
-    closeBtn.setAttribute('aria-label', '사진 모아보기 닫기');
+    const closeBtn = closeButton('사진 모아보기 닫기');
     head.append(title, closeBtn);
     const status = el('div', 'panel-status');
     status.setAttribute('aria-live', 'polite');
     const gallery = el('div', 'gallery');
     panel.append(head, status, gallery);
-    pane.appendChild(panel);
 
     let total = 0;           // 이 대화의 전체 사진 수 (서버가 처음에 알려 주고, 실시간으로 더하고 뺌)
     let nextBefore = null;
     let hasMore = false;
     let loading = false;
     let seq = 0;             // 다시 열어서 새로 불러오면 예전 응답은 버림
-
-    const isOpen = () => !panel.classList.contains('hidden');
-
-    function open() {
-        if (onOpen) onOpen();
-        panel.classList.remove('hidden');
-        pane.classList.add('panel-open');
-        button.setAttribute('aria-expanded', 'true');
-        closeBtn.focus();
-        load(false);   // 열 때마다 새로 (닫혀 있던 동안 바뀐 것까지)
-    }
-
-    function close() {
-        if (!isOpen()) return;
-        panel.classList.add('hidden');
-        pane.classList.remove('panel-open');
-        button.setAttribute('aria-expanded', 'false');
-    }
 
     // ── 불러오기 (more: 더 오래된 사진 이어서) ──
     async function load(more) {
@@ -105,20 +82,15 @@ function setupGallery({ button, pane, mediaUrl, onOpen = null }) {
         item.dataset.id = messageId;
         item.dataset.sender = sender;
         const name = el('span', 'msg-name sr-only', sender);
-        const when = el('span', 'msg-time sr-only', dateLabel(date, time));
+        const label = dateTimeLabel(date, time);   // panel.js
+        const when = el('span', 'msg-time sr-only', label);
         const a = fileElement(photo);   // files.js — 작은 미리보기 (누르면 크게 보기)
         if (photo.photoId) a.dataset.photoId = photo.photoId;
-        a.title = `${sender} · ${dateLabel(date, time)}`;
+        a.title = `${sender} · ${label}`;
         item.append(name, when, a);
         return item;
     }
 
-    // "2026-11-18" + "14:30" → "11월 18일 14:30"
-    function dateLabel(date, time) {
-        if (!date) return time || '';
-        const [, m, d] = date.split('-').map(Number);
-        return `${m}월 ${d}일 ${time || ''}`.trim();
-    }
 
     // 월별 칸: "2026년 11월" 제목 + 3칸 격자 (없으면 만들어서 맨 위/맨 아래에)
     function monthGrid(date, atTop) {
@@ -154,13 +126,7 @@ function setupGallery({ button, pane, mediaUrl, onOpen = null }) {
         updateStatus();
     }
 
-    // ── 이벤트 ──
-    button.setAttribute('aria-expanded', 'false');
-    button.addEventListener('click', () => (isOpen() ? close() : open()));
-    closeBtn.addEventListener('click', close);
-    panel.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && !lightboxOpen()) close();   // 크게 보기가 떠 있으면 그것부터 닫힘
-    });
+    // ── 이벤트 (버튼 여닫기 · ✕ · Esc는 panel.js) ──
     gallery.addEventListener('scroll', () => {   // 아래 끝 근처 → 더 오래된 사진
         if (hasMore && !loading && gallery.scrollTop + gallery.clientHeight > gallery.scrollHeight - 120) load(true);
     });

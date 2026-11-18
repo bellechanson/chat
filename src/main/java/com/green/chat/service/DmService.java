@@ -12,7 +12,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +38,7 @@ import com.green.chat.repository.ChatUserRepository;
 import com.green.chat.repository.DmConversationRepository;
 import com.green.chat.repository.DmMessageRepository;
 import com.green.chat.util.Formats;
+import com.green.chat.util.Paging;
 
 @Service
 @Transactional(readOnly = true)
@@ -244,10 +244,10 @@ public class DmService {
 	// ── 사진 모아보기 (참여자만, 최신순, 삭제 제외) — beforeId가 null이면 최신부터 + 전체 사진 수 ──
 	public MediaPage media(Long conversationId, Long userId, Long beforeId) {
 		DmConversation c = member(conversationId, userId);
-		List<DmMessage> rows = messageRepository.findWithPhotos(conversationId,
-				beforeId == null ? Long.MAX_VALUE : beforeId, Boolean.FALSE, PageRequest.of(0, MediaPage.SIZE + 1));
-		boolean hasMore = rows.size() > MediaPage.SIZE;
-		List<DmMessage> page = hasMore ? rows.subList(0, MediaPage.SIZE) : rows;
+		Paging.Chunk<DmMessage> chunk = Paging.cut(messageRepository.findWithPhotos(conversationId,
+				Paging.before(beforeId), Boolean.FALSE, Paging.plusOne(MediaPage.SIZE)), MediaPage.SIZE,
+				DmMessage::getId);
+		List<DmMessage> page = chunk.page();
 
 		Map<Long, String> names = nicknames(c);
 		Map<Long, List<MessagePhoto>> albums = photoService.photosOf(MessageReaction.DM,
@@ -263,7 +263,7 @@ public class DmService {
 		Long total = beforeId != null ? null
 				: messageRepository.countImageMessages(conversationId, Boolean.FALSE)
 						+ photoService.countDmPhotos(conversationId);
-		return new MediaPage(items, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId(), total);
+		return new MediaPage(items, chunk.hasMore(), chunk.nextBefore(), total);
 	}
 
 	// ── 대화 검색 (참여자만, 최신순, 삭제된 것 제외) — beforeId: 이어서 찾을 때 그 번호보다 오래된 것 ──
@@ -273,16 +273,15 @@ public class DmService {
 		if (q.isEmpty())
 			return SearchPage.empty();
 
-		List<DmMessage> rows = messageRepository.search(conversationId, beforeId == null ? Long.MAX_VALUE : beforeId,
-				Boolean.FALSE, Formats.likePattern(q), PageRequest.of(0, SearchPage.SIZE + 1));
-		boolean hasMore = rows.size() > SearchPage.SIZE;
-		List<DmMessage> page = hasMore ? rows.subList(0, SearchPage.SIZE) : rows;
+		Paging.Chunk<DmMessage> chunk = Paging.cut(messageRepository.search(conversationId, Paging.before(beforeId),
+				Boolean.FALSE, Formats.likePattern(q), Paging.plusOne(SearchPage.SIZE)), SearchPage.SIZE,
+				DmMessage::getId);
 		Map<Long, String> names = nicknames(c);
-		List<SearchHit> hits = page.stream()
+		List<SearchHit> hits = chunk.page().stream()
 				.map(m -> SearchHit.of(m.getId(), names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
 						m.getContent(), Map.of(), m.getCreatedAt()))
 				.toList();
-		return new SearchPage(hits, hasMore, page.isEmpty() ? null : page.get(page.size() - 1).getId());
+		return new SearchPage(hits, chunk.hasMore(), chunk.nextBefore());
 	}
 
 	// ── 보내기 (replyToId: 답장할 메시지 번호 — 이 대화의 삭제 안 된 메시지만, 아니면 보통 메시지로) ──
