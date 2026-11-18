@@ -6,8 +6,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import com.green.chat.dto.DmPage;
 import com.green.chat.dto.DmPhotosEvent;
 import com.green.chat.dto.ReactionDto;
 import com.green.chat.dto.ReactionEvent;
+import com.green.chat.dto.ReplyDto;
 import com.green.chat.entity.Attachment;
 import com.green.chat.entity.ChatUser;
 import com.green.chat.entity.DmConversation;
@@ -218,15 +221,24 @@ public class DmService {
 		List<Long> ids = page.stream().map(DmMessage::getId).toList();
 		Map<Long, List<ReactionDto>> reactions = reactionService.summaries(MessageReaction.DM, ids);
 		Map<Long, List<MessagePhoto>> photos = photoService.photosOf(MessageReaction.DM, ids);
-		return new DmPage(page.stream()
-				.map(m -> DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
-						reactions.getOrDefault(m.getId(), List.of()), photos.getOrDefault(m.getId(), List.of())))
-				.toList(), hasMore);
+
+		// 답장들이 가리키는 원래 메시지 (이 묶음 밖의 예전 메시지도)
+		List<Long> replyIds = page.stream().map(DmMessage::getReplyToId).filter(Objects::nonNull).distinct().toList();
+		Map<Long, DmMessage> originals = replyIds.isEmpty() ? Map.of()
+				: messageRepository.findAllById(replyIds).stream()
+						.collect(Collectors.toMap(DmMessage::getId, Function.identity()));
+
+		return new DmPage(page.stream().map(m -> {
+			ReplyDto reply = m.getReplyToId() == null ? null
+					: replyOf(m.getReplyToId(), originals.get(m.getReplyToId()), names);
+			return DmMessageDto.from(m, names.getOrDefault(m.getSenderId(), ChatUser.WITHDRAWN_NAME),
+					reactions.getOrDefault(m.getId(), List.of()), photos.getOrDefault(m.getId(), List.of()), reply);
+		}).toList(), hasMore);
 	}
 
-	// ── 보내기 ──
+	// ── 보내기 (replyToId: 답장할 메시지 번호 — 이 대화의 삭제 안 된 메시지만, 아니면 보통 메시지로) ──
 	@Transactional
-	public Sent send(Long conversationId, Long senderId, String senderNickname, String content) {
+	public Sent send(Long conversationId, Long senderId, String senderNickname, String content, Long replyToId) {
 		DmConversation c = member(conversationId, senderId);
 		checkPartner(c, senderId);
 
@@ -234,7 +246,26 @@ public class DmService {
 		if (text.isEmpty())
 			throw new IllegalArgumentException("빈 메시지입니다.");
 
-		return saveAndReturn(c, senderId, senderNickname, new DmMessage(c, senderId, text));
+		DmMessage original = replyToId == null ? null
+				: findInConversation(conversationId, replyToId).filter(m -> !m.isDeleted()).orElse(null);
+		DmMessage message = new DmMessage(c, senderId, text);
+		if (original == null)
+			return saveAndReturn(c, senderId, senderNickname, message);
+
+		message.replyTo(original.getId());
+		DmMessage saved = messageRepository.save(message);
+		c.touch();
+		ReplyDto reply = replyOf(original.getId(), original, nicknames(c));
+		return new Sent(DmMessageDto.from(saved, senderNickname, List.of(), List.of(), reply),
+				partnerUsernameOf(c, senderId));
+	}
+
+	// 원래 메시지 → 인용 (없어졌거나 삭제됐으면 "삭제된 메시지")
+	private static ReplyDto replyOf(Long replyToId, DmMessage original, Map<Long, String> names) {
+		if (original == null)
+			return new ReplyDto(replyToId, null, null, true);
+		return ReplyDto.of(original.getId(), names.getOrDefault(original.getSenderId(), ChatUser.WITHDRAWN_NAME),
+				original.getContent(), original.isDeleted());
 	}
 
 	// ── 파일 보내기 ──

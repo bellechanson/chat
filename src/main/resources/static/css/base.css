@@ -296,6 +296,21 @@ select {
 	justify-content: center;
 }
 
+/* 사이드바: 나를 부른 메시지(@멘션·답장)가 있는 방 */
+.side-at {
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 10px;
+	background: var(--accent-soft);
+	color: var(--accent-ink);
+	font-size: 12px;
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
 /* ───────── 화면 뼈대: 왼쪽 사이드바 + 오른쪽 본문 ───────── */
 .shell {
 	display: flex;

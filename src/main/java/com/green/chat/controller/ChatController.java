@@ -87,8 +87,10 @@ public class ChatController {
 		if (content.isEmpty())
 			return;
 
-		ChatMessage saved = chatService.save(roomId, user.getNickname(), content);
-		notifier.messageSent(roomId, user.getId(), saved); // 방 안 + 목록 뱃지 + 데스크톱 알림
+		// "@닉네임"은 멘션으로, replyTo가 있으면 답장으로 저장
+		ChatService.Sent sent = chatService.save(roomId, user.getId(), user.getNickname(), content, message.replyTo());
+		// 방 안 + 목록 뱃지 + 데스크톱 알림 (부른 사람은 알림을 꺼 뒀어도)
+		notifier.messageSent(roomId, user.getId(), sent.message(), sent.mentioned(), sent.repliedTo());
 	}
 
 	// 입력 중 신호 (들어갈 수 있는 방에서만) — 사진·파일을 올리는 중이면 개수도 함께
@@ -145,7 +147,7 @@ public class ChatController {
 
 		String content = Formats.cut(request.content(), MAX_CONTENT);
 		try {
-			ChatMessage edited = chatService.edit(roomId, request.id(), user.getNickname(), content);
+			ChatMessage edited = chatService.edit(roomId, request.id(), user.getId(), user.getNickname(), content);
 			notifier.toRoom(roomId, edited);
 		} catch (IllegalArgumentException e) {
 			log.warn("[메시지 수정 실패] room={}, msg={}, reason={}", roomId, request.id(), e.getMessage());

@@ -58,6 +58,10 @@ public class DmMessage {
 	@Column(name = "edited_at")
 	private LocalDateTime editedAt;
 
+	// 답장이면 원래 메시지 번호 (같은 방·대화 안의 메시지, 답장이 아니면 null)
+	@Column(name = "reply_to_id")
+	private Long replyToId;
+
 	protected DmMessage() {
 	}
 
@@ -85,6 +89,15 @@ public class DmMessage {
 
 	public LocalDateTime getEditedAt() {
 		return editedAt;
+	}
+
+	// 답장으로 만들기 (보낼 때 한 번)
+	public void replyTo(Long messageId) {
+		this.replyToId = messageId;
+	}
+
+	public Long getReplyToId() {
+		return replyToId;
 	}
 
 	public Long getId() {

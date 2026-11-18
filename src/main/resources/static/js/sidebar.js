@@ -46,6 +46,7 @@ function addSideRoom(room) {
         <a class="side-item" href="/rooms/${room.id}">
             <span class="hash">#</span>
             <span class="side-name"></span>
+			<span class="side-at hidden" title="나를 부른 메시지가 있어요">@</span>
             <span class="unread hidden" data-n="0"></span>
             <span class="side-count js-room-count hide-zero hidden" data-room-id="${room.id}">0명</span>
         </a>`;
@@ -189,6 +190,13 @@ function watchSidebar(client) {
         if (info.active === 'room' && info.activeId === a.roomId) return;
         const li = side.querySelector(`#sideRooms li[data-room-id="${a.roomId}"]`);
         if (li && li.dataset.joined === 'true') addCount(li.querySelector('.unread'));
+    });
+
+    // 다른 채팅방에서 나를 부름(@멘션·답장) → 그 방에 "@" (지금 보고 있는 방이면 그대로)
+    client.subscribe('/user/queue/mention', f => {
+        const e = JSON.parse(f.body);
+        if (info.active === 'room' && info.activeId === e.roomId) return;
+        side.querySelector(`#sideRooms li[data-room-id="${e.roomId}"] .side-at`)?.classList.remove('hidden');
     });
 
     client.subscribe('/user/queue/dm', f => onSideDm(JSON.parse(f.body), info));

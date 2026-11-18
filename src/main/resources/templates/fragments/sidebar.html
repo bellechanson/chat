@@ -76,6 +76,9 @@
 						th:classappend="${active == 'room' and activeId == r.id} ? 'on'">
 						<span class="hash">#</span>
 						<span class="side-name" th:text="${r.name}">자유방</span>
+						<!-- 안 읽은 메시지 중에 나를 부른 것(@멘션·답장)이 있으면 (sidebar.js가 실시간으로도 켬) -->
+						<span class="side-at" title="나를 부른 메시지가 있어요"
+							th:classappend="${!r.mentioned or (active == 'room' and activeId == r.id)} ? 'hidden'">@</span>
 						<span class="unread" th:with="current=${active == 'room' and activeId == r.id}"
 							th:attr="data-n=${current or r.unread == null ? 0 : r.unread}"
 							th:classappend="${current or r.unread == null or r.unread == 0} ? 'hidden'"

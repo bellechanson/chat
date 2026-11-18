@@ -36,11 +36,12 @@ public class RoomService {
 	private final FileStorage fileStorage;
 	private final MessageReactionRepository reactionRepository;
 	private final MessagePhotoRepository photoRepository;
+	private final MentionService mentionService;
 
 	public RoomService(ChatRoomRepository roomRepository, ChatMessageRepository messageRepository,
 			RoomBanRepository banRepository, RoomReadRepository readRepository, ChatUserRepository userRepository,
 			FileStorage fileStorage, MessageReactionRepository reactionRepository,
-			MessagePhotoRepository photoRepository) {
+			MessagePhotoRepository photoRepository, MentionService mentionService) {
 		this.roomRepository = roomRepository;
 		this.messageRepository = messageRepository;
 		this.banRepository = banRepository;
@@ -49,6 +50,7 @@ public class RoomService {
 		this.fileStorage = fileStorage;
 		this.reactionRepository = reactionRepository;
 		this.photoRepository = photoRepository;
+		this.mentionService = mentionService;
 	}
 
 	public List<ChatRoom> findAll() {
@@ -125,6 +127,7 @@ public class RoomService {
 		}
 		reactionRepository.deleteRoomReactions(roomId); // 메시지보다 먼저 (메시지 번호로 찾음)
 		photoRepository.deleteRoomPhotos(roomId); // 사진 묶음 정보도 메시지보다 먼저
+		mentionService.deleteRoom(roomId); // @멘션·답장으로 부른 기록
 		messageRepository.deleteByRoomId(roomId);
 		banRepository.deleteByRoomId(roomId);
 		readRepository.deleteByRoomId(roomId);

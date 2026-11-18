@@ -26,7 +26,8 @@ function dayDivider(day) {
 function markContinued(div) {
     const prev = div.previousElementSibling;
     const cont = !!prev && prev.classList.contains('msg') && !!div.dataset.sender
-        && prev.dataset.sender === div.dataset.sender && prev.dataset.time === div.dataset.time;
+        && prev.dataset.sender === div.dataset.sender && prev.dataset.time === div.dataset.time
+        && !div.querySelector('.reply-quote');   // 답장은 이름이 보이게 묶지 않음
     div.classList.toggle('cont', cont);
 }
 
@@ -147,6 +148,9 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
         if (box.scrollTop < 40) loadMore();   // 맨 위 근처 → 이전 대화
     });
 
+    // 메시지 번호로 화면 요소 찾기 (삭제·수정·반응을 그 메시지에 반영할 때)
+    const find = (id) => box.querySelector(`.msg[data-id="${id}"]`);
+
     return {
         loadFirst,
         // 새 메시지 붙이기: 날짜가 바뀌었으면 구분선 먼저
@@ -165,9 +169,23 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
         keepBottom() {
             if (stickToBottom) scrollToBottom();
         },
-        // 메시지 번호로 화면 요소 찾기 (삭제·수정·반응을 그 메시지에 반영할 때)
-        find(id) {
-            return box.querySelector(`.msg[data-id="${id}"]`);
+        find,
+        // 답장 인용을 누름 → 원래 메시지로 이동 (화면에 없으면 이전 대화를 더 불러오며 찾음, 최대 1000개)
+        //   찾으면 가운데로 스크롤하고 잠깐 강조, 못 찾으면 false
+        async jumpTo(id) {
+            let target = find(id);
+            for (let tries = 0;!target && hasMore && tries < 25;tries++) {
+                if (loadingMore) await new Promise(r => setTimeout(r, 200));   // 스크롤로 불러오는 중이면 기다림
+                else await loadMore();
+                target = find(id);
+            }
+            if (!target) return false;
+            target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            target.classList.remove('flash');
+            void target.offsetWidth;   // 같은 메시지를 다시 눌러도 강조가 다시 보이게
+            target.classList.add('flash');
+            setTimeout(() => target.classList.remove('flash'), 1600);
+            return true;
         }
     };
 }
@@ -213,10 +231,9 @@ function splitLinks(text) {
     return parts;
 }
 
-// 요소 안을 글 + 링크로 채우기 (새 메시지, 수정된 메시지, 수정 취소 모두 이걸로 그림)
+// 요소 끝에 글 + 링크 붙이기
 //   링크는 새 탭에서 열리고(noopener), 연 사이트가 채팅 창을 건드리지 못함
-function fillWithLinks(el, text) {
-    el.replaceChildren();
+function appendLinks(el, text) {
     if (!text) return;
     splitLinks(text).forEach(part => {
         if (!part.url) {
@@ -231,6 +248,83 @@ function fillWithLinks(el, text) {
         a.textContent = part.url;   // 적은 그대로 보여 줌 (www. 앞에 https://를 붙이지 않음)
         el.append(a);
     });
+}
+
+// ───── @멘션 ─────
+// 서버는 "@영희"를 "<@12>"로 저장하고, 메시지마다 mentions {12: '영희'}(지금 이름)를 같이 보냄
+//   mentions에 있는 번호만 "@이름"으로 그림 (직접 "<@5>"라고 적은 글자는 그대로)
+const MENTION_RE = /<@(\d+)>/g;
+
+// 말풍선 내용 그리기: @멘션은 강조, 주소는 링크 (새 메시지, 수정된 메시지, 수정 취소 모두 이걸로)
+function fillContent(el, text, mentions = {}) {
+    el.replaceChildren();
+    if (!text) return;
+    let last = 0;
+    for (const m of text.matchAll(MENTION_RE)) {
+        const name = mentions[m[1]];
+        if (name === undefined) continue;
+        appendLinks(el, text.slice(last, m.index));
+        const span = document.createElement('span');
+        span.className = 'mention';
+        span.dataset.userId = m[1];
+        span.textContent = '@' + name;
+        el.appendChild(span);
+        last = m.index + m[0].length;
+    }
+    appendLinks(el, text.slice(last));
+}
+
+// "<@12> 안녕" → "@영희 안녕" (답장 미리보기용 글자)
+function plainContent(text, mentions = {}) {
+    return (text || '').replace(MENTION_RE, (token, id) => mentions[id] === undefined ? token : '@' + mentions[id]);
+}
+
+// 누가 닉네임을 바꾸거나 탈퇴함 → 화면의 @멘션 글자를 새 이름으로 (/topic/nickname)
+function renameMentions(userId, nickname) {
+    document.querySelectorAll(`.mention[data-user-id="${userId}"]`).forEach(span => {
+        span.textContent = '@' + nickname;
+    });
+}
+
+// ───── 답장 인용 ─────
+const QUOTE_MAX = 80;   // 서버 ReplyDto와 같은 길이
+
+// 인용에 넣을 글: 줄바꿈·여러 칸 띄어쓰기는 한 칸으로, 80자가 넘으면 "…"
+function quotePreview(text) {
+    const t = (text || '').replace(/\s+/g, ' ').trim();
+    return t.length > QUOTE_MAX ? t.slice(0, QUOTE_MAX) + '…' : t;
+}
+
+// 메시지 위 작은 인용 "영희  강아지 귀엽네요" — 누르면 onJump(원래 메시지 번호)
+//   reply: { id, sender, preview, deleted } (서버 ReplyDto)
+function replyQuote(reply, onJump) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'reply-quote';
+    btn.dataset.replyId = reply.id;
+    btn.title = '원래 메시지로 이동';
+    const who = document.createElement('strong');
+    who.className = 'reply-who';
+    who.textContent = reply.sender || '';
+    const text = document.createElement('span');
+    text.className = 'reply-text';
+    btn.append(who, text);
+    setQuoteText(btn, reply.deleted ? null : reply.preview);
+    if (onJump) btn.onclick = () => onJump(reply.id);
+    return btn;
+}
+
+// preview가 null이면 "삭제된 메시지입니다"
+function setQuoteText(el, preview) {
+    const deleted = preview == null;
+    el.classList.toggle('deleted', deleted);
+    el.querySelector('.reply-text').textContent = deleted ? '삭제된 메시지입니다' : preview;
+}
+
+// 원래 메시지가 수정·삭제됨 → 그 메시지를 인용한 답장들도 바로 바꿈 (preview가 null이면 삭제)
+//   원래 메시지가 화면에 없어도(아직 안 불러온 예전 메시지) 인용은 바뀜
+function updateQuotes(id, preview) {
+    document.querySelectorAll(`.reply-quote[data-reply-id="${id}"]`).forEach(q => setQuoteText(q, preview));
 }
 
 // ───── 이모지 반응 ─────
@@ -419,7 +513,8 @@ function markDeleted(div) {
     if (reactPicker && reactPicker._owner && div.contains(reactPicker._owner)) closeReactPicker();
     div._onReact = null;
     div._onDeletePhoto = null;
-    div.querySelectorAll('.msg-tools, .msg-edited, .reactions').forEach(el => el.remove());
+    div.querySelectorAll('.msg-tools, .msg-edited, .reactions, .reply-quote').forEach(el => el.remove());
+    div.classList.remove('calls-me');
 }
 
 // ───── 메시지 수정 ─────
@@ -438,11 +533,19 @@ function setEditedMark(div, editedAt) {
 
 // 수정 신호를 받았을 때 (나·다른 사람·내 다른 탭 모두): 내용 교체 + "(수정됨)"
 //   그 메시지를 수정하던 중이었으면 수정창을 닫고 새 내용으로
-function markEdited(div, content, editedAt) {
+//   mentions: 채팅방 메시지의 멘션 이름 (새로 부르거나 뺄 수 있으니 "나를 부름" 표시도 다시 계산)
+function markEdited(div, content, editedAt, mentions = {}) {
     if (div.classList.contains('deleted')) return;
     div.classList.remove('editing');
-    fillWithLinks(div.querySelector('.bubble'), content);   // 새 내용도 링크로
+    fillContent(div.querySelector('.bubble'), content, mentions);   // 새 내용도 멘션·링크로
     setEditedMark(div, editedAt);
+    div.classList.toggle('calls-me', callsMe(div, mentions));
+}
+
+// 이 메시지가 나를 부르는지: 남의 메시지가 나를 @멘션했거나, 내 메시지에 단 답장
+function callsMe(div, mentions) {
+    if (div.classList.contains('me') || div._myId == null) return false;
+    return div._repliesToMe || String(div._myId) in (mentions || {});
 }
 
 // 말풍선 자리에서 바로 고치기: Enter 저장, Esc 취소
@@ -450,7 +553,8 @@ function markEdited(div, content, editedAt) {
 function startEdit(div, save) {
     if (div.classList.contains('editing') || div.classList.contains('deleted')) return;
     const bubble = div.querySelector('.bubble');
-    const original = bubble.textContent;   // 링크가 있어도 글자 그대로 (적은 주소 그대로 입력칸에)
+    const original = bubble.textContent;   // 링크·멘션이 있어도 글자 그대로 ("@영희", 적은 주소 그대로 입력칸에)
+    const originalNodes = [...bubble.childNodes];   // 취소하면 멘션 강조까지 그대로 되돌림
     div.classList.add('editing');
 
     const input = document.createElement('input');
@@ -480,12 +584,13 @@ function startEdit(div, save) {
     function close(text) {
         if (!div.classList.contains('editing')) return;   // 이미 삭제·수정 신호로 닫힘
         div.classList.remove('editing');
-        fillWithLinks(bubble, text);
+        if (text === null) bubble.replaceChildren(...originalNodes);
+        else fillContent(bubble, text);
     }
     function done() {
         const text = input.value.trim();
-        if (!text || text === original) return close(original);   // 비었거나 그대로면 취소
-        close(text);                 // 화면엔 바로 반영, 서버의 수정 신호가 오면 "(수정됨)"이 붙음
+        if (!text || text === original) return close(null);   // 비었거나 그대로면 취소
+        close(text);                 // 화면엔 바로 반영, 서버의 수정 신호가 오면 멘션 강조·"(수정됨)"이 붙음
         save(text);
     }
 
@@ -496,11 +601,11 @@ function startEdit(div, save) {
             done();
         } else if (e.key === 'Escape') {
             e.preventDefault();
-            close(original);
+            close(null);
         }
     });
     saveBtn.onclick = done;
-    cancelBtn.onclick = () => close(original);
+    cancelBtn.onclick = () => close(null);
 }
 
 // ───── 메시지 한 줄: 아바타 | 이름 · 시각 (수정됨) (· 1) [반응] [수정] [삭제] / 내용 / 반응 칩 ─────
@@ -513,9 +618,14 @@ function startEdit(div, save) {
 //   photos     : 사진 묶음이면 사진 목록 (격자로 그림, 글 수정 불가)
 //   onDeletePhoto: 있으면 묶음 칸마다 ✕, onDeletePhoto(사진번호)
 //   onImageLoad: 사진이 다 불러와지면 호출 (맨 아래 유지용)
+//   reply      : 답장이면 원래 메시지 인용 { id, sender, preview, deleted }, onJump(번호): 인용을 누르면
+//   mentions   : 내용 속 "<@번호>"를 그릴 이름 {번호: 이름} (채팅방)
+//   repliesToMe: 내 메시지에 단 답장이면 true → 말풍선에 "나를 부름" 표시 (채팅방)
+//   onReply    : 있으면 [답장] 버튼
 function messageLine({ id, name, mine, time, content, file, deleted, editedAt = null, unread = false,
     reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, photos = [],
-    onDeletePhoto = null, onImageLoad }) {
+    onDeletePhoto = null, onImageLoad, reply = null, onJump = null, mentions = {}, repliesToMe = false,
+    onReply = null }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제·수정·반응 신호가 오면 이 번호로 찾음
@@ -558,10 +668,12 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
         bubble.classList.add(file.image ? 'has-img' : 'has-file');
         bubble.appendChild(fileElement(file, onImageLoad));
     } else {
-        fillWithLinks(bubble, content);   // 주소는 누를 수 있는 링크로
+        fillContent(bubble, content, mentions);   // @멘션은 강조, 주소는 누를 수 있는 링크로
     }
 
-    main.append(head, bubble);
+    main.append(head);
+    if (reply && !deleted) main.appendChild(replyQuote(reply, onJump));   // 말풍선 위 작은 인용
+    main.appendChild(bubble);
     div.append(avatar, main);
 
     if (deleted) {
@@ -573,10 +685,13 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
     div._onReact = onReact;
     div._onImageLoad = onImageLoad;       // 묶음을 다시 그릴 때 (setAlbum)
     div._onDeletePhoto = onDeletePhoto;
+    div._repliesToMe = repliesToMe;
+    div.classList.toggle('calls-me', callsMe(div, mentions));
 
-    // 오른쪽 버튼 묶음: [반응](글·사진·파일 모두) [수정](글 메시지만) [삭제]
+    // 오른쪽 버튼 묶음: [답장] [반응](글·사진·파일 모두) [수정](글 메시지만) [삭제]
     const tools = document.createElement('span');
     tools.className = 'msg-tools';
+    if (onReply) tools.appendChild(toolButton('답장', '답장하기', () => onReply()));
     if (onReact) tools.appendChild(toolButton('반응', '반응 달기', btn => openReactPicker(btn, onReact)));
     if (onEdit && !file && !album) tools.appendChild(toolButton('수정', '메시지 수정', () => startEdit(div, onEdit)));
     if (onDelete) tools.appendChild(toolButton('삭제', '메시지 삭제', () => onDelete(), true));
@@ -622,7 +737,7 @@ function messageActions({ getClient, base, audience }) {
         return true;
     }
     return {
-        send: (content) => publish('send', { content }),
+        send: (content, replyTo = null) => publish('send', { content, replyTo }),
         typing: (on) => publish('typing', { typing: on }),
         // 사진·파일 올리는 중 → 상대 화면에 "○○님이 사진 12장을 보내는 중" (다 올리면 0, 0)
         uploading: (photos, files) => publish('typing', { typing: photos + files > 0, photos, files }),
@@ -642,21 +757,169 @@ function messageActions({ getClient, base, audience }) {
     };
 }
 
-// ───── 입력칸: [보내기]·Enter로 보내기 + 입력 중 신호 (채팅방, 1:1 공통) ─────
-//   actions: messageActions가 돌려준 값
-function setupComposer({ input, sendButton, actions }) {
+// ───── 입력칸: [보내기]·Enter로 보내기 + 입력 중 신호 + 답장 (채팅방, 1:1 공통) ─────
+//   actions     : messageActions가 돌려준 값
+//   loadMembers : 있으면 @를 칠 때 이름 고르기 (채팅방) — () => Promise<[{id, nickname}]>
+// 돌려주는 값: replyTo({ id, sender, preview }) 답장 시작, cancelReplyIf(번호) 그 메시지가 지워지면 답장 닫기
+function setupComposer({ input, sendButton, actions, loadMembers = null }) {
     const typing = watchTyping(input, (on) => actions.typing(on));   // 2초 간격으로 "입력 중"
+    const picker = loadMembers ? setupMentionPicker(input, loadMembers) : null;
+
+    // 입력칸 위 "영희님에게 답장  강아지 귀엽네요  ✕"
+    let reply = null;
+    const bar = document.createElement('div');
+    bar.className = 'reply-bar hidden';
+    const who = document.createElement('strong');
+    who.className = 'reply-who';
+    const text = document.createElement('span');
+    text.className = 'reply-text';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '✕';
+    close.title = '답장 취소 (Esc)';
+    close.setAttribute('aria-label', '답장 취소');
+    close.onclick = () => clearReply();
+    bar.append(who, text, close);
+    input.closest('.composer-box').before(bar);
+
+    function clearReply() {
+        reply = null;
+        bar.classList.add('hidden');
+    }
 
     function send() {
         const content = input.value.trim();
-        if (!content || !actions.send(content)) return;
+        if (!content || !actions.send(content, reply ? reply.id : null)) return;
         input.value = '';
         input.focus();
         typing.sent();
+        clearReply();
     }
 
     sendButton.onclick = send;
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.isComposing) send();
+        if (picker && picker.handleKey(e)) return;   // 이름 고르는 중이면 ↑↓ Enter Esc는 거기서
+        if (e.key === 'Escape' && reply) {
+            e.preventDefault();
+            clearReply();
+        } else if (e.key === 'Enter' && !e.isComposing) {
+            send();
+        }
     });
+
+    return {
+        replyTo(info) {
+            reply = info;
+            who.textContent = `${info.sender}님에게 답장`;
+            text.textContent = quotePreview(info.preview);
+            bar.classList.remove('hidden');
+            input.focus();
+        },
+        cancelReplyIf(id) {
+            if (reply && String(reply.id) === String(id)) clearReply();
+        }
+    };
+}
+
+// ───── @를 치면 이름 고르기 (채팅방 입력칸) ─────
+//   "@" 또는 "@영" 처럼 치면 이 방 사람 목록이 뜨고 ↑↓로 고르고 Enter·Tab(또는 클릭)으로 넣음, Esc 닫기
+//   넣으면 "@영희 " (서버가 보낼 때 멘션으로 바꿈)
+// 돌려주는 값: handleKey(e) — 목록이 떠 있을 때 키를 처리했으면 true
+function setupMentionPicker(input, loadMembers) {
+    const MAX_ITEMS = 8;
+    const CACHE_MS = 30000;   // 사람 목록은 30초 동안 다시 안 불러옴
+    const pop = document.createElement('ul');
+    pop.className = 'mention-pop hidden';
+    pop.setAttribute('role', 'listbox');
+    input.closest('.composer-box').appendChild(pop);
+
+    let members = null;
+    let loadedAt = 0;
+    let items = [];
+    let active = 0;
+    let start = -1;   // "@"의 위치
+
+    async function loadCached() {
+        if (!members || Date.now() - loadedAt > CACHE_MS) {
+            try {
+                members = await loadMembers();
+            } catch (e) {
+                members = members || [];
+            }
+            loadedAt = Date.now();
+        }
+        return members;
+    }
+
+    async function update() {
+        const caret = input.selectionStart;
+        const m = input.value.slice(0, caret).match(/(^|\s)@([^\s@]*)$/);   // 줄 처음이나 띄어쓰기 뒤의 @
+        if (!m) return close();
+        start = caret - m[2].length - 1;
+        const q = m[2].toLowerCase();
+        const list = await loadCached();
+        items = list.filter(u => u.nickname.toLowerCase().includes(q)).slice(0, MAX_ITEMS);
+        if (items.length === 0) return close();
+        active = 0;
+        render();
+    }
+
+    function render() {
+        pop.replaceChildren(...items.map((u, i) => {
+            const li = document.createElement('li');
+            li.setAttribute('role', 'option');
+            li.className = i === active ? 'active' : '';
+            li.setAttribute('aria-selected', i === active);
+            const av = document.createElement('span');
+            av.className = 'avatar avatar-sm av-' + tintOf(u.nickname);   // sidebar.js
+            av.textContent = initialOf(u.nickname);
+            const name = document.createElement('span');
+            name.textContent = u.nickname;
+            li.append(av, name);
+            li.addEventListener('mousedown', (e) => {   // 입력칸 포커스를 잃지 않게 mousedown에서
+                e.preventDefault();
+                pick(i);
+            });
+            return li;
+        }));
+        pop.classList.remove('hidden');
+    }
+
+    function close() {
+        pop.classList.add('hidden');
+        items = [];
+    }
+
+    function pick(i) {
+        const u = items[i];
+        if (!u) return close();
+        const caret = input.selectionStart;
+        const insert = '@' + u.nickname + ' ';
+        input.value = input.value.slice(0, start) + insert + input.value.slice(caret);
+        const pos = start + insert.length;
+        input.setSelectionRange(pos, pos);
+        input.focus();
+        close();
+    }
+
+    input.addEventListener('input', update);
+    input.addEventListener('blur', close);
+
+    return {
+        handleKey(e) {
+            if (pop.classList.contains('hidden') || e.isComposing) return false;
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                active = (active + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+                render();
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                pick(active);
+            } else if (e.key === 'Escape') {
+                close();
+            } else {
+                return false;
+            }
+            e.preventDefault();
+            return true;
+        }
+    };
 }

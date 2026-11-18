@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.green.chat.entity.ChatUser;
 import com.green.chat.entity.RoomRead;
 
 public interface RoomReadRepository extends JpaRepository<RoomRead, Long> {
@@ -37,6 +38,15 @@ public interface RoomReadRepository extends JpaRepository<RoomRead, Long> {
 			   and u.id <> :excludeUserId
 			""")
 	List<String> findMemberUsernames(@Param("roomId") Long roomId, @Param("excludeUserId") Long excludeUserId);
+
+	// 이 방에 들어와 본 적 있는 회원 (@멘션 자동완성·찾기)
+	@Query("""
+			select u
+			  from RoomRead r, ChatUser u
+			 where r.roomId = :roomId
+			   and u.id = r.userId
+			""")
+	List<ChatUser> findMembers(@Param("roomId") Long roomId);
 
 	@Modifying
 	@Query("delete from RoomRead r where r.roomId = :roomId")

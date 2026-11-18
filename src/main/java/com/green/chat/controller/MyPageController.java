@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.green.chat.dto.AccountEvent;
+import com.green.chat.dto.NicknameEvent;
 import com.green.chat.entity.ChatUser;
 import com.green.chat.security.LoginSessionManager;
 import com.green.chat.security.LoginUser;
@@ -56,6 +57,9 @@ public class MyPageController {
 		try {
 			ChatUser updated = userService.changeNickname(loginUser.getId(), nickname);
 			refreshLogin(updated, request, response); // 다시 로그인 안 해도 새 닉네임 적용
+			// 모든 화면의 @멘션 글자를 새 이름으로
+			messagingTemplate.convertAndSend("/topic/nickname",
+					new NicknameEvent(updated.getId(), updated.getNickname()));
 			ra.addFlashAttribute("nicknameMsg", "닉네임이 변경되었습니다.");
 		} catch (IllegalArgumentException e) {
 			ra.addFlashAttribute("nicknameError", e.getMessage());
@@ -94,6 +98,9 @@ public class MyPageController {
 		sessionManager.expireUser(loginUser.getId());
 		messagingTemplate.convertAndSendToUser(oldUsername, "/queue/account",
 				new AccountEvent("회원 탈퇴가 완료되어 로그아웃되었습니다."));
+		// 모든 화면의 @멘션 글자를 "(탈퇴한 사용자)"로
+		messagingTemplate.convertAndSend("/topic/nickname",
+				new NicknameEvent(loginUser.getId(), ChatUser.WITHDRAWN_NAME));
 
 		// 지금 이 브라우저: 세션 끝내기 + 로그인 유지 쿠키 지우기
 		new SecurityContextLogoutHandler().logout(request, response,

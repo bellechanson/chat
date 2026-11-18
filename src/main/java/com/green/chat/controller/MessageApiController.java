@@ -20,6 +20,7 @@ import com.green.chat.dto.MessagePage;
 import com.green.chat.security.LoginUser;
 import com.green.chat.service.ChatService;
 import com.green.chat.service.FileStorage;
+import com.green.chat.service.MentionService;
 import com.green.chat.service.RoomNotifier;
 import com.green.chat.service.RoomService;
 
@@ -31,13 +32,25 @@ public class MessageApiController {
 	private final RoomService roomService;
 	private final RoomNotifier notifier;
 	private final FileStorage fileStorage;
+	private final MentionService mentionService;
 
 	public MessageApiController(ChatService chatService, RoomService roomService, RoomNotifier notifier,
-			FileStorage fileStorage) {
+			FileStorage fileStorage, MentionService mentionService) {
 		this.chatService = chatService;
 		this.roomService = roomService;
 		this.notifier = notifier;
 		this.fileStorage = fileStorage;
+		this.mentionService = mentionService;
+	}
+
+	// GET /api/rooms/1/members → 이 방에 들어와 본 회원 [{id, nickname}] (입력칸 @ 자동완성)
+	@GetMapping("/{roomId}/members")
+	public ResponseEntity<List<MentionService.Member>> members(@PathVariable Long roomId,
+			@AuthenticationPrincipal LoginUser loginUser) {
+		if (!roomService.canJoin(roomId, loginUser.getId())) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		}
+		return ResponseEntity.ok(mentionService.members(roomId));
 	}
 
 	// GET /api/rooms/1/messages → 최신 50개

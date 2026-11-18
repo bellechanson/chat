@@ -47,7 +47,8 @@ public class DmSocketController {
 			return;
 
 		try {
-			DmService.Sent sent = dmService.send(conversationId, user.getId(), user.getNickname(), request.content());
+			DmService.Sent sent = dmService.send(conversationId, user.getId(), user.getNickname(), request.content(),
+					request.replyTo());
 			dmNotifier.messageSent(principal.getName(), user.getNickname(), sent);
 		} catch (IllegalArgumentException e) {
 			log.warn("[DM 전송 실패] conv={}, user={}, reason={}", conversationId, user.getId(), e.getMessage());
