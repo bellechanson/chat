@@ -20,6 +20,21 @@ function dayDivider(day) {
     return div;
 }
 
+// ───── 연속 메시지 묶기 ─────
+// 같은 사람이 같은 분(시각 "14:30"이 같음)에 연달아 보낸 메시지 → 두 번째부터 .cont (아바타·이름·시각 생략)
+//   바로 앞이 날짜 구분선·입장 안내면 묶지 않음 (메시지끼리 붙어 있을 때만)
+function markContinued(div) {
+    const prev = div.previousElementSibling;
+    const cont = !!prev && prev.classList.contains('msg') && !!div.dataset.sender
+        && prev.dataset.sender === div.dataset.sender && prev.dataset.time === div.dataset.time;
+    div.classList.toggle('cont', cont);
+}
+
+// 목록 전체 다시 묶기 (처음 불러올 때, 이전 대화를 위에 붙일 때 — 경계의 메시지도 맞춰 줌)
+function groupMessages(box) {
+    box.querySelectorAll('.msg').forEach(markContinued);
+}
+
 // 메시지 목록: 처음 불러오기, 위로 스크롤하면 이전 대화 더보기, 맨 아래 따라가기, 날짜 구분선
 //   box       : 메시지 영역 (#messages)
 //   fetchPage : (beforeId) → { messages: [...], hasMore } (실패하면 null), 메시지마다 date("2026-11-17")
@@ -81,6 +96,7 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
             if (!page) return;
             const messages = page.messages;
             box.appendChild(withDays(messages));
+            groupMessages(box);
             if (messages.length > 0) {
                 oldestId = messages[0].id;
                 lastDay = messages[messages.length - 1].date || null;
@@ -113,6 +129,7 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
                     first.remove();
                 }
                 topBar.after(withDays(messages));
+                groupMessages(box);
                 oldestId = messages[0].id;
                 box.scrollTop = box.scrollHeight - prevHeight + prevTop;
             }
@@ -141,6 +158,7 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
                 lastDay = day;
             }
             box.appendChild(element);
+            if (element.classList.contains('msg')) markContinued(element);
             if (stick) scrollToBottom();
         },
         // 사진이 다 불러와진 뒤 높이가 늘어나도 맨 아래 유지
@@ -501,6 +519,10 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제·수정·반응 신호가 오면 이 번호로 찾음
+
+    div.classList.add(mine ? 'tint-me' : 'tint-' + tintOf(name));   // 말풍선 색 = 아바타 색
+    div.dataset.sender = name;     // 연속 메시지 묶기 (markContinued)
+    div.dataset.time = time;
 
     const avatar = document.createElement('span');
     avatar.className = 'avatar ' + (mine ? 'avatar-accent' : 'av-' + tintOf(name));

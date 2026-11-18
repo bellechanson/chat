@@ -1060,3 +1060,153 @@ button.react-chip:hover {
 	color: var(--muted);
 	font-weight: 500;
 }
+
+
+/* ───── 말풍선 (messages.js의 messageLine) ─────
+   말풍선 색 = 보낸 사람 아바타 색 (.tint-0~5는 base.css의 .av-0~5와 같은 색, 나는 .tint-me = 주황) */
+.bubble {
+	display: inline-block;
+	max-width: min(560px, 100%);
+	margin-top: 4px;
+	padding: 8px 12px;
+	border-radius: 4px 14px 14px 14px;
+	background: var(--side);
+	line-height: 1.5;
+}
+
+.msg.tint-0 .bubble {
+	background: #FCE7EC;
+}
+
+.msg.tint-1 .bubble {
+	background: #DDEBFB;
+}
+
+.msg.tint-2 .bubble {
+	background: #E3F2EA;
+}
+
+.msg.tint-3 .bubble {
+	background: #EFE7FB;
+}
+
+.msg.tint-4 .bubble {
+	background: #FFF1CC;
+}
+
+.msg.tint-5 .bubble {
+	background: #E2F3F6;
+}
+
+.msg.tint-me .bubble {
+	background: var(--accent);
+	color: #FFFFFF;
+}
+
+/* 주황 말풍선 속 링크는 흰색 */
+.msg.tint-me .bubble .msg-link,
+.msg.tint-me .bubble .msg-link:hover {
+	color: #FFFFFF;
+}
+
+.msg.tint-me .bubble .msg-link:focus-visible {
+	outline-color: #FFFFFF;
+}
+
+/* 사진 · 사진 묶음: 말풍선 없이 둥근 카드 */
+.msg .bubble.has-img {
+	padding: 0;
+	background: none;
+	border-radius: 10px;
+}
+
+/* 파일: 말풍선 안의 카드 */
+.msg .bubble.has-file {
+	padding: 0;
+}
+
+.bubble.has-file .att-file {
+	border-color: transparent;
+}
+
+.bubble.has-file .att-file:hover {
+	background: rgba(0, 0, 0, .04);
+}
+
+.msg.tint-me .att-file {
+	color: #FFFFFF;
+}
+
+.msg.tint-me .att-file .size {
+	color: rgba(255, 255, 255, .8);
+}
+
+.msg.tint-me .att-file .icon {
+	background: #FFFFFF;
+	color: var(--accent-ink);
+}
+
+.msg.tint-me .bubble.has-file .att-file:hover {
+	background: rgba(255, 255, 255, .12);
+}
+
+/* 삭제된 메시지: 회색 말풍선 */
+.msg.deleted .bubble {
+	background: var(--side);
+	color: #6E665D;
+}
+
+/* 고치는 중: 말풍선 대신 입력칸 */
+.msg.editing .bubble {
+	display: block;
+	padding: 0;
+	border-radius: 0;
+	background: none;
+	color: inherit;
+}
+
+/* ───── 연속 메시지 (messages.js의 markContinued) ─────
+   같은 사람이 같은 분에 연달아 보내면 두 번째부터 아바타·이름·시각 생략, 말풍선만 촘촘히
+   ("1", "(수정됨)", 버튼은 말풍선 오른쪽에) */
+.msg.cont {
+	padding-top: 1px;
+	padding-bottom: 1px;
+}
+
+.msg.cont .avatar {
+	visibility: hidden;
+	height: 0;
+}
+
+.msg.cont .msg-name,
+.msg.cont .msg-time {
+	display: none;
+}
+
+.msg.cont .msg-main {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	column-gap: 6px;
+}
+
+.msg.cont .bubble {
+	min-width: 0;
+	margin-top: 0;
+	border-radius: 14px;
+}
+
+.msg.cont .msg-head {
+	order: 1;
+	flex: 1;
+	padding-bottom: 2px;
+}
+
+.msg.cont .reactions {
+	order: 2;
+	flex-basis: 100%;
+}
+
+.msg.cont.editing .msg-main {
+	display: block;
+}
