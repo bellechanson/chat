@@ -183,14 +183,9 @@
 				onDeletePhoto: mine ? (photoId) => actions.removePhoto(m.id, photoId) : null,   // 내 묶음에서 한 장씩
 				onImageLoad: list.keepBottom,
 				reply: m.reply,                                         // 답장이면 원래 메시지 인용 (누르면 이동)
-				onJump: jumpTo,
+				onJump: (id) => list.jumpTo(id, '원래 메시지를 찾을 수 없어요.'),
 				onReply: canSend ? () => composer.replyTo({id: m.id, sender: m.senderNickname, preview: m.content}) : null
 			});
-		}
-
-		// 답장 인용을 누름 → 원래 메시지로 이동 (예전 메시지면 더 불러오며 찾음)
-		async function jumpTo(id) {
-			if (!await list.jumpTo(id)) toast('원래 메시지를 찾을 수 없어요.');
 		}
 
 

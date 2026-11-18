@@ -188,18 +188,13 @@
 				onImageLoad: list.keepBottom,
 				// 답장: 원래 메시지 인용(누르면 이동), [답장] 버튼, @멘션, 나를 부른 메시지 표시
 				reply: msg.reply,
-				onJump: jumpTo,
+				onJump: (id) => list.jumpTo(id, '원래 메시지를 찾을 수 없어요.'),
 				mentions: msg.mentions || {},
 				repliesToMe: !!msg.reply && !msg.reply.deleted && msg.reply.sender === nickname,
 				onReply: msg.id ? () => composer.replyTo({
 					id: msg.id, sender: msg.sender, preview: plainContent(msg.content, msg.mentions)
 				}) : null
 			});
-		}
-
-		// 답장 인용을 누름 → 원래 메시지로 이동 (예전 메시지면 더 불러오며 찾음)
-		async function jumpTo(id) {
-			if (!await list.jumpTo(id)) toast('원래 메시지를 찾을 수 없어요.');
 		}
 
 

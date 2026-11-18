@@ -171,15 +171,18 @@ function createMessageList({ box, fetchPage, build, divider = null }) {
         },
         find,
         // 답장 인용을 누름 → 원래 메시지로 이동 (화면에 없으면 이전 대화를 더 불러오며 찾음, 최대 1000개)
-        //   찾으면 가운데로 스크롤하고 잠깐 강조, 못 찾으면 false
-        async jumpTo(id) {
+        //   찾으면 가운데로 스크롤하고 잠깐 강조, 못 찾으면 missingText를 토스트로 띄우고 false
+        async jumpTo(id, missingText = '메시지를 찾을 수 없어요.') {
             let target = find(id);
             for (let tries = 0;!target && hasMore && tries < 25;tries++) {
                 if (loadingMore) await new Promise(r => setTimeout(r, 200));   // 스크롤로 불러오는 중이면 기다림
                 else await loadMore();
                 target = find(id);
             }
-            if (!target) return false;
+            if (!target) {
+                toast(missingText);   // dialog.js
+                return false;
+            }
             target.scrollIntoView({ block: 'center', behavior: 'smooth' });
             target.classList.remove('flash');
             void target.offsetWidth;   // 같은 메시지를 다시 눌러도 강조가 다시 보이게

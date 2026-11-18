@@ -118,7 +118,7 @@ function setupSearch({ button, pane, searchUrl, list }) {
     // 결과를 누름 → 그 메시지로 이동하고 말풍선 속 검색어 강조
     async function jump(id) {
         const box = document.getElementById('messages');
-        if (!await list.jumpTo(id)) return toast('메시지를 찾을 수 없어요.');
+        if (!await list.jumpTo(id)) return;   // 못 찾으면 jumpTo가 알려 줌
         clearMarks(box);
         const bubble = list.find(id)?.querySelector('.bubble');
         if (bubble) markText(bubble, query);

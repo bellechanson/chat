@@ -338,6 +338,8 @@
 }
 
 .composer-box {
+	position: relative;
+	/* @ 이름 고르기 목록(.mention-pop)의 기준 */
 	border: 1px solid var(--line-strong);
 	border-radius: 12px;
 	background: #FFFFFF;
@@ -1319,10 +1321,6 @@ button.react-chip:hover {
 }
 
 /* @를 치면 뜨는 이름 목록 (입력칸 위) */
-.composer-box {
-	position: relative;
-}
-
 .mention-pop {
 	position: absolute;
 	left: 12px;
