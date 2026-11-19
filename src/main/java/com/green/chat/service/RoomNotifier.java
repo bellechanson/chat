@@ -12,6 +12,8 @@ import com.green.chat.dto.ChatMessage;
 import com.green.chat.dto.MentionEvent;
 import com.green.chat.dto.MessageType;
 import com.green.chat.dto.NotifyEvent;
+import com.green.chat.dto.PinDto;
+import com.green.chat.dto.PinEvent;
 import com.green.chat.dto.ReactionEvent;
 import com.green.chat.dto.RoomActivity;
 import com.green.chat.dto.RoomSummary;
@@ -114,6 +116,29 @@ public class RoomNotifier {
 			if (calledTitle != null) // 사이드바 그 방에 "@"
 				messagingTemplate.convertAndSendToUser(username, "/queue/mention",
 						new MentionEvent(roomId, message.id()));
+		}
+	}
+
+	// 공지가 바뀜 (pin이 null이면 해제) → 방 안 사람들의 공지 띠
+	public void pinChanged(Long roomId, PinDto pin) {
+		messagingTemplate.convertAndSend("/topic/room/" + roomId + "/pin", new PinEvent(roomId, pin));
+	}
+
+	// 새 공지 → 공지 띠 + 이 방에 들어와 본 회원들에게 데스크톱 알림 (고정한 사람, 이 방 알림을 꺼 둔 사람 제외)
+	public void pinned(Long roomId, Long byUserId, PinDto pin) {
+		pinChanged(roomId, pin);
+		try {
+			RoomService.NotifyTargets targets = roomService.notifyTargets(roomId, byUserId);
+			Set<String> muted = muteService.mutedUsernames(MuteService.ROOM, roomId);
+			NotifyEvent event = new NotifyEvent("📌 새 공지 · " + targets.roomName(),
+					pin.sender() + ": " + Formats.preview(MentionService.plain(pin.content(), pin.mentions())),
+					"/rooms/" + roomId, "room-" + roomId + "-pin", pin.messageId());
+			for (String username : targets.usernames()) {
+				if (!muted.contains(username))
+					messagingTemplate.convertAndSendToUser(username, "/queue/notify", event);
+			}
+		} catch (Exception e) {
+			log.warn("[공지 알림 전송 실패] room={}", roomId, e); // 알림이 실패해도 공지는 그대로
 		}
 	}
 

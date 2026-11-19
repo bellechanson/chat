@@ -14,6 +14,7 @@
 	<script th:src="@{/js/panel.js}"></script>
 	<script th:src="@{/js/search.js}"></script>
 	<script th:src="@{/js/gallery.js}"></script>
+	<script th:src="@{/js/pin.js}"></script>
 </head>
 
 <body>
@@ -99,6 +100,12 @@
 			mediaUrl: `/api/dm/${convId}/media`
 		});
 
+		// ── 공지 띠 (pin.js): 메시지 목록 위, 누르면 그 메시지로. 1:1은 둘 다 고정·해제 ──
+		const pin = setupPin({
+			messages: el('messages'), pinUrl: `/api/dm/${convId}/pin`, canPin: true, list,
+			foldKey: `chat.pinFold.dm.${convId}`
+		});
+
 		// ── 읽음 처리: 화면을 보고 있을 때만 ──
 		function markRead() {
 			if (client && client.connected && document.visibilityState === 'visible') {
@@ -141,6 +148,7 @@
 			composer?.cancelReplyIf(e.messageId);      // 이 메시지에 답장 쓰던 중이면 닫기
 			search.onDeleted(e.messageId);             // 검색 결과에서도 빠짐
 			gallery.onDeleted(e.messageId);            // 사진 모아보기에서도 빠짐
+			pin.onDeleted(e.messageId);                // 공지였으면 띠도 내림
 		}
 
 		// 수정 신호 (내 다른 탭, 상대 화면 모두): 내용 교체 + "(수정됨)", 알림·안 읽은 수는 그대로
@@ -150,6 +158,7 @@
 			if (target) markEdited(target, e.content, e.editedAt);
 			updateQuotes(e.messageId, quotePreview(e.content));   // 이 메시지를 인용한 답장들도 새 내용으로
 			search.onEdited(e.messageId, e.content);              // 검색 결과도 새 내용으로 (검색어가 빠지면 빠짐)
+			pin.onEdited(e.messageId, e.content);                 // 공지였으면 띠 글자도
 		}
 
 		// 상대 접속 상태 (머리의 초록 점, "접속 중"/"오프라인")
@@ -184,7 +193,8 @@
 				onImageLoad: list.keepBottom,
 				reply: m.reply,                                         // 답장이면 원래 메시지 인용 (누르면 이동)
 				onJump: (id) => list.jumpTo(id, '원래 메시지를 찾을 수 없어요.'),
-				onReply: canSend ? () => composer.replyTo({id: m.id, sender: m.senderNickname, preview: m.content}) : null
+				onReply: canSend ? () => composer.replyTo({id: m.id, sender: m.senderNickname, preview: m.content}) : null,
+				onPin: m.id ? () => pin.pin(m.id) : null                // 공지로 고정 (둘 다 가능, pin.js)
 			});
 		}
 
@@ -262,12 +272,18 @@
 			c.subscribe('/user/queue/dm-edited', f => onEdited(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-reactions', f => onReactions(JSON.parse(f.body)));
 			c.subscribe('/user/queue/dm-photos', f => onPhotos(JSON.parse(f.body)));
+			c.subscribe('/user/queue/dm-pin', f => {   // 공지 고정·해제 (나·상대·내 다른 탭)
+				const e = JSON.parse(f.body);
+				if (e.targetId === convId) pin.apply(e.pin);
+			});
+			pin.load();   // 지금 공지 (재연결 때도)
 			c.subscribe('/topic/online', f => onOnline(JSON.parse(f.body)));
 			// 누가 닉네임을 바꾸거나 탈퇴 → 검색 결과·모아보기의 보낸 사람 이름도
 			c.subscribe('/topic/nickname', f => {
 				const e = JSON.parse(f.body);
 				search.onRenamed(e.oldNickname, e.nickname);
 				gallery.onRenamed(e.oldNickname, e.nickname);   // 모아보기 사진의 보낸 사람 이름도
+				pin.onRenamed(e.oldNickname, e.nickname);       // 공지 띠의 이름도
 			});
 			markRead();
 			el('content')?.focus();

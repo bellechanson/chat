@@ -1541,3 +1541,95 @@ button.react-chip:hover {
 .gallery-item .att-img:hover img {
 	opacity: .88;
 }
+
+
+
+/* ───── 공지 띠 (pin.js): 메시지 목록 바로 위 ───── */
+.pin-bar {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 10px 28px 0;
+	padding: 4px 6px 4px 4px;
+	border: 1px solid var(--line-strong);
+	border-left: 3px solid var(--accent);
+	border-radius: 10px;
+	background: #FFFFFF;
+	box-shadow: 0 2px 8px rgba(31, 27, 23, .06);
+}
+
+/* 패널(검색·사진)이 열리면 띠도 패널 왼쪽까지만 */
+.pane.panel-open .pin-bar {
+	margin-right: 368px;
+}
+
+.pin-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--ink);
+	font: inherit;
+	font-size: 14px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pin-main:hover {
+	background: var(--accent-soft);
+}
+
+.pin-label {
+	flex: none;
+	color: var(--accent);
+	font-weight: 700;
+}
+
+/* 내용은 한 줄 (넘치면 …) */
+.pin-text {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.pin-meta {
+	flex: none;
+	color: var(--faint);
+	font-size: 12px;
+}
+
+.pin-unpin {
+	flex: none;
+	padding: 4px 10px;
+	border: 1px solid var(--line-strong);
+	border-radius: 6px;
+	background: #FFFFFF;
+	color: var(--muted);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.pin-unpin:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+/* 접힌 띠: "📌 공지"만 작게 */
+.pin-bar.folded {
+	align-self: flex-start;
+}
+
+.pin-bar.folded .pin-text,
+.pin-bar.folded .pin-meta,
+.pin-bar.folded .pin-unpin {
+	display: none;
+}

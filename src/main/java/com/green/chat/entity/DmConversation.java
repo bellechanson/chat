@@ -46,6 +46,13 @@ public class DmConversation {
 	@Column(name = "user2_hidden")
 	private Boolean user2Hidden = false;
 
+	// 공지로 고정한 메시지 번호 (없으면 null) · 고정한 사람 (둘 중 누구나)
+	@Column(name = "pinned_message_id")
+	private Long pinnedMessageId;
+
+	@Column(name = "pinned_by_id")
+	private Long pinnedById;
+
 	protected DmConversation() {
 	}
 
@@ -89,6 +96,25 @@ public class DmConversation {
 
 	public boolean isHiddenFor(Long userId) {
 		return userId.equals(user1Id) ? Boolean.TRUE.equals(user1Hidden) : Boolean.TRUE.equals(user2Hidden);
+	}
+
+	// 공지 고정 (대화에 하나 — 새로 고정하면 바뀜, 검사는 PinService에서)
+	public void pin(Long messageId, Long userId) {
+		this.pinnedMessageId = messageId;
+		this.pinnedById = userId;
+	}
+
+	public void unpin() {
+		this.pinnedMessageId = null;
+		this.pinnedById = null;
+	}
+
+	public Long getPinnedMessageId() {
+		return pinnedMessageId;
+	}
+
+	public Long getPinnedById() {
+		return pinnedById;
 	}
 
 	public Long getId() {

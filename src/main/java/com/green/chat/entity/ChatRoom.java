@@ -26,6 +26,13 @@ public class ChatRoom {
 
 	private LocalDateTime createdAt;
 
+	// 공지로 고정한 메시지 번호 (없으면 null) · 고정한 사람 (CHAT_USER.id)
+	@Column(name = "pinned_message_id")
+	private Long pinnedMessageId;
+
+	@Column(name = "pinned_by_id")
+	private Long pinnedById;
+
 	protected ChatRoom() {
 	}
 
@@ -37,6 +44,25 @@ public class ChatRoom {
 
 	public boolean isOwner(Long userId) {
 		return ownerId != null && ownerId.equals(userId);
+	}
+
+	// 공지 고정 (한 방에 하나 — 새로 고정하면 바뀜, 검사는 PinService에서)
+	public void pin(Long messageId, Long userId) {
+		this.pinnedMessageId = messageId;
+		this.pinnedById = userId;
+	}
+
+	public void unpin() {
+		this.pinnedMessageId = null;
+		this.pinnedById = null;
+	}
+
+	public Long getPinnedMessageId() {
+		return pinnedMessageId;
+	}
+
+	public Long getPinnedById() {
+		return pinnedById;
 	}
 
 	public Long getId() {

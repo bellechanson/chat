@@ -625,10 +625,11 @@ function startEdit(div, save) {
 //   mentions   : 내용 속 "<@번호>"를 그릴 이름 {번호: 이름} (채팅방)
 //   repliesToMe: 내 메시지에 단 답장이면 true → 말풍선에 "나를 부름" 표시 (채팅방)
 //   onReply    : 있으면 [답장] 버튼
+//   onPin      : 있으면 [고정] 버튼 → 이 메시지를 공지로 (권한은 부르는 쪽에서 판단, pin.js)
 function messageLine({ id, name, mine, time, content, file, deleted, editedAt = null, unread = false,
     reactions = [], myId = null, onReact = null, onDelete = null, onEdit = null, photos = [],
     onDeletePhoto = null, onImageLoad, reply = null, onJump = null, mentions = {}, repliesToMe = false,
-    onReply = null }) {
+    onReply = null, onPin = null }) {
     const div = document.createElement('div');
     div.className = 'msg' + (mine ? ' me' : '');
     if (id) div.dataset.id = id;   // 삭제·수정·반응 신호가 오면 이 번호로 찾음
@@ -691,11 +692,12 @@ function messageLine({ id, name, mine, time, content, file, deleted, editedAt = 
     div._repliesToMe = repliesToMe;
     div.classList.toggle('calls-me', callsMe(div, mentions));
 
-    // 오른쪽 버튼 묶음: [답장] [반응](글·사진·파일 모두) [수정](글 메시지만) [삭제]
+    // 오른쪽 버튼 묶음: [답장] [반응] [고정](글·사진·파일 모두) [수정](글 메시지만) [삭제]
     const tools = document.createElement('span');
     tools.className = 'msg-tools';
     if (onReply) tools.appendChild(toolButton('답장', '답장하기', () => onReply()));
     if (onReact) tools.appendChild(toolButton('반응', '반응 달기', btn => openReactPicker(btn, onReact)));
+    if (onPin) tools.appendChild(toolButton('고정', '공지로 고정', () => onPin()));
     if (onEdit && !file && !album) tools.appendChild(toolButton('수정', '메시지 수정', () => startEdit(div, onEdit)));
     if (onDelete) tools.appendChild(toolButton('삭제', '메시지 삭제', () => onDelete(), true));
     if (tools.children.length > 0) head.appendChild(tools);
