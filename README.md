@@ -103,16 +103,26 @@ Tomcat 11은 multipart 파트 개수 기본 제한이 50개라는 것도 이때 
 
 ## 폴더 구조
 
+처음엔 controller / service / dto 같은 레이어별로 나눠 놨는데, 파일이 100개를 넘어가니까 dto 폴더 하나에 38개가 들어 있어서 찾기가 힘들었습니다.
+그래서 기능별로 묶고 그 안에서 레이어를 나누는 식으로 바꿨습니다.
+
 ```
 src/main/java/com/green/chat
-├─ config        WebSocket, Security, 구독 권한 검사
-├─ controller    화면 / REST API / STOMP 메시지 처리
-├─ service       비즈니스 로직, 실시간 알림 보내는 곳(RoomNotifier, DmNotifier)
-├─ repository
-├─ entity
-├─ dto
-├─ security      로그인 유지, 접속 세션 관리
-└─ util
+├─ global        여러 기능이 같이 쓰는 것
+│  ├─ config       Security, WebSocket 설정
+│  ├─ websocket    연결 감시, 채팅방 구독 권한 검사
+│  ├─ security     로그인, 로그인 유지, 접속 세션 관리
+│  └─ util
+├─ user          회원가입, 로그인, 이메일 인증, 내 정보, 탈퇴
+├─ room          채팅방 (방, 메시지, 읽음, 접속자)
+├─ dm            1:1 대화
+├─ message       채팅방과 1:1이 같이 쓰는 것 (파일·사진, 반응, 멘션, 답장, 검색, 모아보기)
+├─ notify        알림 끄기, 아이콘 숫자
+├─ pin           공지
+├─ admin         관리자 화면
+└─ sidebar       왼쪽 사이드바
+
+(각 기능 안에 controller / service / entity / repository / dto 중 필요한 것만 있습니다)
 
 src/main/resources
 ├─ templates     Thymeleaf 화면 (fragments에 사이드바·입력칸 같은 공통 조각)
